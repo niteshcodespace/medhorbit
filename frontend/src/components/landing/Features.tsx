@@ -1,9 +1,16 @@
 import FeatureCard from "./FeatureCard";
+import Container from "@/components/common/Container";
+import Section from "@/components/common/Section";
+import { TYPOGRAPHY } from "@/constants";
 
 export default function Features() {
   return (
-    <section className="pb-20">
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 md:grid-cols-3">
+    <Section id="features" tabIndex={-1} aria-labelledby="features-title">
+      <Container>
+        <h2 id="features-title" className={`mb-10 text-center ${TYPOGRAPHY.sectionTitle}`}>
+          Learning with MedhOrbit
+        </h2>
+        <div className="grid gap-6 md:grid-cols-3">
 
         <FeatureCard
           emoji="📚"
@@ -18,12 +25,14 @@ export default function Features() {
         />
 
         <FeatureCard
+          id="for-everyone"
           emoji="👨‍👩‍👧"
           title="For Everyone"
           description="Built for students, parents and teachers."
         />
 
-      </div>
-    </section>
+        </div>
+      </Container>
+    </Section>
   );
 }

@@ -1,3 +1,5 @@
+import { SPACING } from "@/constants";
+
 type CardProps = {
   children: React.ReactNode;
 };
@@ -5,14 +7,14 @@ type CardProps = {
 export default function Card({ children }: CardProps) {
   return (
     <div
-      className="
+      className={`
       rounded-2xl
       bg-white/5
-      p-6
+      ${SPACING.card}
       backdrop-blur
       border
       border-white/10
-      "
+      `}
     >
       {children}
     </div>

@@ -1,20 +1,15 @@
 export const COLORS = {
-  primary: "#2563EB",
-  secondary: "#1E293B",
+  primary: "bg-blue-600",
+  primaryHover: "hover:bg-blue-700",
 
-  accent: "#38BDF8",
+  secondary: "bg-slate-800",
+  secondaryHover: "hover:bg-slate-700",
 
-  background: "#0F172A",
+  background: "bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950",
 
-  card: "#1E293B",
-
-  white: "#FFFFFF",
-
-  gray100: "#F8FAFC",
-  gray300: "#CBD5E1",
-  gray500: "#64748B",
-
-  success: "#22C55E",
-
-  danger: "#EF4444",
+  text: {
+    primary: "text-white",
+    secondary: "text-slate-300",
+    muted: "text-slate-400",
+  },
 };

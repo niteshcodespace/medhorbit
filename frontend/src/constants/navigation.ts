@@ -4,15 +4,11 @@ export const NAV_ITEMS = [
     href: "/",
   },
   {
-    title: "Worksheets",
-    href: "/worksheets",
+    title: "Features",
+    href: "/#features",
   },
   {
-    title: "Pricing",
-    href: "/pricing",
-  },
-  {
-    title: "About",
-    href: "/about",
+    title: "Who it’s for",
+    href: "/#for-everyone",
   },
 ];
