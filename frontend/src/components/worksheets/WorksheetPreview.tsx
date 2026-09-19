@@ -54,6 +54,14 @@ export default function WorksheetPreview({ worksheet, headingRef }: WorksheetPre
             <li key={question.id} className="pl-2 break-words">{question.prompt}</li>
           ))}
         </ol>
+        <section aria-labelledby="worksheet-answer-key-title" className="mt-8 border-t border-white/10 pt-6">
+          <h3 id="worksheet-answer-key-title" className="text-xl font-bold">Answer Key</h3>
+          <ol className={`mt-4 list-decimal space-y-4 pl-6 ${TYPOGRAPHY.body}`}>
+            {questions.map((question) => (
+              <li key={question.id} className="pl-2 break-words">{question.answer}</li>
+            ))}
+          </ol>
+        </section>
       </Card>
     </section>
   );

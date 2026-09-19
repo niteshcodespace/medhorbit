@@ -32,6 +32,7 @@ export type Question = {
   readonly topicId: string;
   readonly difficulty: Difficulty;
   readonly prompt: string;
+  readonly answer: string;
 };
 
 export type Worksheet = {
