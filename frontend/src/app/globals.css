@@ -23,3 +23,114 @@ body {
   outline: 2px solid #93c5fd;
   outline-offset: 4px;
 }
+
+/* Print-only identity fields and headings must not affect the screen layout. */
+.worksheet-print-only {
+  display: none !important;
+}
+
+@media print {
+  @page medhorbit-worksheet {
+    margin: 16mm;
+  }
+
+  /* Apply worksheet printing only while a current preview is mounted. */
+  html:has(.worksheet-page .worksheet-print),
+  body:has(.worksheet-page .worksheet-print) {
+    color-scheme: light;
+    background: white;
+    color: black;
+    display: block;
+    height: auto;
+    min-height: 0;
+  }
+
+  body:has(.worksheet-page .worksheet-print) {
+    page: medhorbit-worksheet;
+    margin: 0;
+  }
+
+  /* Keep only the worksheet page and its printable content in the output. */
+  body:has(.worksheet-page .worksheet-print) > :not(.worksheet-page),
+  body:has(.worksheet-page .worksheet-print) .worksheet-screen-only {
+    display: none !important;
+  }
+
+  .worksheet-page:has(.worksheet-print).worksheet-print-layout,
+  .worksheet-page:has(.worksheet-print) .worksheet-print-layout {
+    display: block;
+    width: auto;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .worksheet-page .worksheet-print,
+  .worksheet-page .worksheet-print > div {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    overflow: visible;
+    break-inside: auto;
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+
+  .worksheet-page .worksheet-print * {
+    color: black;
+    text-shadow: none;
+    outline: none;
+  }
+
+  .worksheet-page .worksheet-print-only {
+    display: block !important;
+  }
+
+  .worksheet-page .worksheet-print-only.worksheet-student-details {
+    display: grid !important;
+  }
+
+  .worksheet-page .worksheet-print-only.worksheet-student-details,
+  .worksheet-page .worksheet-print dl {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm 8mm;
+    margin-top: 6mm;
+  }
+
+  .worksheet-page .worksheet-print h2 {
+    font-size: 20pt;
+  }
+
+  .worksheet-page .worksheet-print h3 {
+    font-size: 14pt;
+  }
+
+  .worksheet-page .worksheet-print :is(h2, h3) {
+    break-after: avoid;
+  }
+
+  .worksheet-page .worksheet-print li,
+  .worksheet-page .worksheet-print dl,
+  .worksheet-page .worksheet-student-details {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .worksheet-page .worksheet-print-page-break {
+    display: block;
+    break-before: page !important;
+    page-break-before: always !important;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+}

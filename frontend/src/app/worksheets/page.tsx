@@ -22,14 +22,14 @@ export default function WorksheetsPage() {
         Skip to main content
       </a>
       <Navbar />
-      <main id="main-content" tabIndex={-1} className="flex-1">
-        <Section aria-labelledby="worksheets-title">
-          <Container>
-            <div className="mx-auto max-w-3xl">
-              <h1 id="worksheets-title" className={TYPOGRAPHY.sectionTitle}>
+      <main id="main-content" tabIndex={-1} className="worksheet-page worksheet-print-layout flex-1">
+        <Section aria-labelledby="worksheets-title" className="worksheet-print-layout">
+          <Container className="worksheet-print-layout">
+            <div className="worksheet-print-layout mx-auto max-w-3xl">
+              <h1 id="worksheets-title" className={`worksheet-screen-only ${TYPOGRAPHY.sectionTitle}`}>
                 Worksheet Generator
               </h1>
-              <p className={`mt-4 mb-8 ${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
+              <p className={`worksheet-screen-only mt-4 mb-8 ${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
                 Choose your worksheet settings from our small sample curriculum.
                 All fields are required.
               </p>

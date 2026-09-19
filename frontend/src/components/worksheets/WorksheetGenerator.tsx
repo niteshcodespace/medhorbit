@@ -115,7 +115,8 @@ export default function WorksheetGenerator() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="worksheet-print-layout space-y-8">
+    <div className="worksheet-screen-only">
     <Card>
       <form
         aria-label="Worksheet configuration"
@@ -262,8 +263,16 @@ export default function WorksheetGenerator() {
         {generation.status === "error" ? generation.message : ""}
       </p>
     </Card>
+    </div>
     {generation.status === "success" && (
+      <>
+      <div className="worksheet-screen-only">
+        <Button type="button" onClick={() => window.print()} className="w-full sm:w-auto">
+          Print / Save as PDF
+        </Button>
+      </div>
       <WorksheetPreview worksheet={generation.worksheet} headingRef={previewHeading} />
+      </>
     )}
     </div>
   );

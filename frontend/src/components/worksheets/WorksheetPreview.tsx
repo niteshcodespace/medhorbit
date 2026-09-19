@@ -16,7 +16,7 @@ export default function WorksheetPreview({ worksheet, headingRef }: WorksheetPre
   const topic = subject?.topics.find((item) => item.id === config.topicId);
 
   return (
-    <section aria-labelledby="worksheet-preview-title">
+    <section aria-labelledby="worksheet-preview-title" className="worksheet-print">
       <Card>
         <h2
           id="worksheet-preview-title"
@@ -24,8 +24,13 @@ export default function WorksheetPreview({ worksheet, headingRef }: WorksheetPre
           tabIndex={-1}
           className={`scroll-mt-6 ${TYPOGRAPHY.sectionTitle}`}
         >
-          Worksheet Preview
+          <span className="worksheet-screen-only">Worksheet Preview</span>
+          <span className="worksheet-print-only">MedhOrbit / Worksheet</span>
         </h2>
+        <div className="worksheet-print-only worksheet-student-details">
+          <p>Name: __________________</p>
+          <p>Date: __________________</p>
+        </div>
         <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <dt className={COLORS.text.secondary}>Class</dt>
@@ -54,7 +59,7 @@ export default function WorksheetPreview({ worksheet, headingRef }: WorksheetPre
             <li key={question.id} className="pl-2 break-words">{question.prompt}</li>
           ))}
         </ol>
-        <section aria-labelledby="worksheet-answer-key-title" className="mt-8 border-t border-white/10 pt-6">
+        <section aria-labelledby="worksheet-answer-key-title" className="worksheet-answer-key worksheet-print-page-break mt-8 border-t border-white/10 pt-6">
           <h3 id="worksheet-answer-key-title" className="text-xl font-bold">Answer Key</h3>
           <ol className={`mt-4 list-decimal space-y-4 pl-6 ${TYPOGRAPHY.body}`}>
             {questions.map((question) => (
