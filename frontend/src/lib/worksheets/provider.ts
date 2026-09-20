@@ -4,8 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 export const MODEL = "claude-sonnet-5";
 // Room for up to 15 short Grade 5 questions with answers.
 const MAX_TOKENS = 4096;
-// Room for up to 15 short per-question evaluation verdicts.
-const EVALUATION_MAX_TOKENS = 2048;
+// Room for up to 15 per-question evaluation verdicts plus redundant pairs.
+const EVALUATION_MAX_TOKENS = 3072;
 const TIMEOUT_MS = 60_000;
 
 const RESPONSE_SCHEMA = {
@@ -38,17 +38,39 @@ const EVALUATION_RESPONSE_SCHEMA = {
         properties: {
           index: { type: "integer" },
           answerValid: { type: "boolean" },
+          logicallyConsistent: { type: "boolean" },
           difficultyValid: { type: "boolean" },
           topicValid: { type: "boolean" },
           ageAppropriate: { type: "boolean" },
           reason: { type: "string" },
         },
-        required: ["index", "answerValid", "difficultyValid", "topicValid", "ageAppropriate", "reason"],
+        required: [
+          "index",
+          "answerValid",
+          "logicallyConsistent",
+          "difficultyValid",
+          "topicValid",
+          "ageAppropriate",
+          "reason",
+        ],
+        additionalProperties: false,
+      },
+    },
+    redundantPairs: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          indexA: { type: "integer" },
+          indexB: { type: "integer" },
+          reason: { type: "string" },
+        },
+        required: ["indexA", "indexB", "reason"],
         additionalProperties: false,
       },
     },
   },
-  required: ["questions"],
+  required: ["questions", "redundantPairs"],
   additionalProperties: false,
 };
 
