@@ -1,9 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 // Change the model here only; the service and UI do not depend on it.
-const MODEL = "claude-sonnet-5";
+export const MODEL = "claude-sonnet-5";
 // Room for up to 15 short Grade 5 questions with answers.
 const MAX_TOKENS = 4096;
+// Room for up to 15 short per-question evaluation verdicts.
+const EVALUATION_MAX_TOKENS = 2048;
 const TIMEOUT_MS = 60_000;
 
 const RESPONSE_SCHEMA = {
@@ -26,6 +28,30 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false,
 };
 
+const EVALUATION_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          index: { type: "integer" },
+          answerValid: { type: "boolean" },
+          difficultyValid: { type: "boolean" },
+          topicValid: { type: "boolean" },
+          ageAppropriate: { type: "boolean" },
+          reason: { type: "string" },
+        },
+        required: ["index", "answerValid", "difficultyValid", "topicValid", "ageAppropriate", "reason"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["questions"],
+  additionalProperties: false,
+};
+
 export type ProviderErrorKind = "missing_key" | "api_error" | "bad_response";
 
 /** Provider failure with a kind the service maps to a safe user message. */
@@ -40,29 +66,45 @@ export class ProviderError extends Error {
   }
 }
 
+let cachedClient: Anthropic | null = null;
+
 /**
- * Sends a prompt to Claude and returns the raw text of the reply, which the
- * schema-constrained output makes a JSON string. Never logs or returns the key.
+ * Returns a shared Anthropic client, creating it on first use. Callers in
+ * this module and validator.ts reuse it instead of constructing their own.
  */
-export async function callClaudeAPI(prompt: string): Promise<string> {
+export function getAnthropicClient(): Anthropic {
+  if (cachedClient) return cachedClient;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new ProviderError("missing_key", "ANTHROPIC_API_KEY is not set.");
   }
-
-  const client = new Anthropic({
+  cachedClient = new Anthropic({
     apiKey,
     timeout: TIMEOUT_MS,
     maxRetries: 0,
   });
+  return cachedClient;
+}
+
+/**
+ * Sends a single-turn, JSON-schema-constrained request to Claude and returns
+ * the raw reply text. Shared by generation and evaluation calls so there is
+ * one place that owns request/response handling for the Anthropic client.
+ */
+async function sendJsonSchemaRequest(
+  prompt: string,
+  schema: Record<string, unknown>,
+  maxTokens: number,
+): Promise<string> {
+  const client = getAnthropicClient();
 
   let message: Anthropic.Message;
   try {
     message = await client.messages.create({
       model: MODEL,
-      max_tokens: MAX_TOKENS,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
-      output_config: { format: { type: "json_schema", schema: RESPONSE_SCHEMA } },
+      output_config: { format: { type: "json_schema", schema } },
     });
   } catch (error) {
     const status = error instanceof Anthropic.APIError ? error.status : undefined;
@@ -81,4 +123,22 @@ export async function callClaudeAPI(prompt: string): Promise<string> {
     throw new ProviderError("bad_response", "Response contained no text.");
   }
   return textBlock.text;
+}
+
+/**
+ * Sends a prompt to Claude and returns the raw text of the reply, which the
+ * schema-constrained output makes a JSON string. Never logs or returns the key.
+ */
+export async function callClaudeAPI(prompt: string): Promise<string> {
+  return sendJsonSchemaRequest(prompt, RESPONSE_SCHEMA, MAX_TOKENS);
+}
+
+/**
+ * Sends one batched quality-evaluation request covering every question in a
+ * worksheet and returns the raw JSON reply text. This is the only Claude call
+ * Phase 7A validation makes; callers must parse and validate the result
+ * themselves — this is a quality heuristic, not a guarantee of correctness.
+ */
+export async function evaluateWorksheetQuality(prompt: string): Promise<string> {
+  return sendJsonSchemaRequest(prompt, EVALUATION_RESPONSE_SCHEMA, EVALUATION_MAX_TOKENS);
 }
