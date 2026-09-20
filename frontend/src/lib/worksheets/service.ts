@@ -83,10 +83,29 @@ function parseQuestions(
   });
 }
 
+// Phase 7A issue codes that mean the *validation system* itself failed
+// (bad/missing evaluator reply), as opposed to a worksheet quality problem.
+// These are never retried - retrying a broken check wastes a call for
+// nothing, per Phase 7B's "system failure vs quality failure" distinction.
+const SYSTEM_FAILURE_CODES = new Set(["evaluator_malformed", "evaluator_count_mismatch"]);
+
+function isSystemFailure(validation: Awaited<ReturnType<typeof validateWorksheet>>): boolean {
+  return validation.issues.some((issue) => issue.severity === "error" && SYSTEM_FAILURE_CODES.has(issue.code));
+}
+
+const MAX_GENERATION_ATTEMPTS = 2;
+const RETRY_HINT = "\n\nThis is a retry attempt. Generate a different set of questions.";
+
 /**
  * Generates a worksheet with Claude. The catalog lookup, question ids and all
  * metadata are server-owned; the model supplies only prompt and answer text.
  * Throws WorksheetGenerationError; never returns a partial worksheet.
+ *
+ * Retries generation once (max 2 attempts total) if Phase 7A validation
+ * finds a critical worksheet-quality failure (e.g. duplicates, an incorrect
+ * answer, an off-topic question). Non-quality failures - missing config,
+ * invalid requests, provider/network errors, malformed model or evaluator
+ * output - fail immediately and are never retried.
  */
 export async function generateWorksheet(
   request: GenerateWorksheetRequest,
@@ -108,91 +127,108 @@ export async function generateWorksheet(
     );
   }
 
-  const prompt = buildPrompt(request, {
+  const basePrompt = buildPrompt(request, {
     classLabel: selectedClass.label,
     subjectLabel: subject.label,
     topicLabel: topic.label,
   });
 
-  let text: string;
-  try {
-    text = await callClaudeAPI(prompt);
-  } catch (error) {
-    if (error instanceof ProviderError) {
-      console.error("[worksheets/service] provider failure:", error.kind, error.status ?? "");
-      if (error.kind === "missing_key") {
-        throw new WorksheetGenerationError(
-          "Worksheet generation is not configured on the server.",
-          500,
-        );
+  for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
+    const prompt = attempt === 1 ? basePrompt : `${basePrompt}${RETRY_HINT}`;
+
+    let text: string;
+    try {
+      text = await callClaudeAPI(prompt);
+    } catch (error) {
+      if (error instanceof ProviderError) {
+        console.error("[worksheets/service] provider failure:", error.kind, error.status ?? "");
+        if (error.kind === "missing_key") {
+          throw new WorksheetGenerationError(
+            "Worksheet generation is not configured on the server.",
+            500,
+          );
+        }
+        throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
       }
+      console.error("[worksheets/service] unexpected provider error:", error instanceof Error ? error.name : "unknown");
+      throw new WorksheetGenerationError(GENERIC_FAILURE, 500);
+    }
+
+    let generated: { prompt: string; answer: string }[];
+    try {
+      generated = parseQuestions(text, request.questionCount);
+    } catch (error) {
+      console.error("[worksheets/service] invalid model output:", error instanceof Error ? error.message : "unknown");
       throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
     }
-    console.error("[worksheets/service] unexpected provider error:", error instanceof Error ? error.name : "unknown");
-    throw new WorksheetGenerationError(GENERIC_FAILURE, 500);
-  }
 
-  let generated: { prompt: string; answer: string }[];
-  try {
-    generated = parseQuestions(text, request.questionCount);
-  } catch (error) {
-    console.error("[worksheets/service] invalid model output:", error instanceof Error ? error.message : "unknown");
-    throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
-  }
+    let validation: Awaited<ReturnType<typeof validateWorksheet>>;
+    try {
+      validation = await validateWorksheet({
+        classLabel: selectedClass.label,
+        subjectLabel: subject.label,
+        topicLabel: topic.label,
+        difficulty: request.difficulty,
+        questions: generated,
+      });
+    } catch (error) {
+      console.error(
+        "[worksheets/service] validation run threw unexpectedly:",
+        error instanceof Error ? error.message : "unknown",
+      );
+      throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
+    }
 
-  let validation: Awaited<ReturnType<typeof validateWorksheet>>;
-  try {
-    validation = await validateWorksheet({
-      classLabel: selectedClass.label,
-      subjectLabel: subject.label,
-      topicLabel: topic.label,
-      difficulty: request.difficulty,
-      questions: generated,
-    });
-  } catch (error) {
-    console.error(
-      "[worksheets/service] validation run threw unexpectedly:",
-      error instanceof Error ? error.message : "unknown",
-    );
-    throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
-  }
+    if (validation.isValid) {
+      const warningCodes = validation.issues.map((issue) => issue.code);
+      if (warningCodes.length > 0) {
+        console.log("[worksheets/service] worksheet passed validation with warnings:", warningCodes.join(", "));
+      } else {
+        console.log("[worksheets/service] worksheet passed validation.");
+      }
 
-  if (!validation.isValid) {
+      const questions: Question[] = generated.map((item, index) => ({
+        id: `${request.topicId}-${request.difficulty}-${index + 1}`,
+        prompt: item.prompt,
+        type: "short-answer",
+        answer: item.answer,
+      }));
+
+      return {
+        questions,
+        metadata: {
+          classId: request.classId,
+          subjectId: request.subjectId,
+          topicId: request.topicId,
+          difficulty: request.difficulty,
+          questionCount: request.questionCount,
+          generated: new Date().toISOString(),
+        },
+      };
+    }
+
     const codes = validation.issues.map((issue) => issue.code).join(", ");
     const indices = validation.issues
       .map((issue) => issue.questionIndex)
       .filter((index): index is number => typeof index === "number");
-    console.error(
-      "[worksheets/service] worksheet failed validation:",
+
+    if (isSystemFailure(validation) || attempt === MAX_GENERATION_ATTEMPTS) {
+      console.error(
+        `[worksheets/service] worksheet failed validation (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS}, no retry):`,
+        `codes=[${codes}]`,
+        `questionIndices=[${indices.join(",")}]`,
+      );
+      throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
+    }
+
+    console.warn(
+      `[worksheets/service] worksheet failed validation (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS}), retrying:`,
       `codes=[${codes}]`,
       `questionIndices=[${indices.join(",")}]`,
     );
-    throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
   }
 
-  const warningCodes = validation.issues.map((issue) => issue.code);
-  if (warningCodes.length > 0) {
-    console.log("[worksheets/service] worksheet passed validation with warnings:", warningCodes.join(", "));
-  } else {
-    console.log("[worksheets/service] worksheet passed validation.");
-  }
-
-  const questions: Question[] = generated.map((item, index) => ({
-    id: `${request.topicId}-${request.difficulty}-${index + 1}`,
-    prompt: item.prompt,
-    type: "short-answer",
-    answer: item.answer,
-  }));
-
-  return {
-    questions,
-    metadata: {
-      classId: request.classId,
-      subjectId: request.subjectId,
-      topicId: request.topicId,
-      difficulty: request.difficulty,
-      questionCount: request.questionCount,
-      generated: new Date().toISOString(),
-    },
-  };
+  // Unreachable: the loop above always returns or throws before exhausting
+  // MAX_GENERATION_ATTEMPTS.
+  throw new WorksheetGenerationError(GENERIC_FAILURE, 502);
 }
