@@ -1,7 +1,11 @@
+import type { Difficulty } from "./types";
+
 /** Body accepted by POST /api/worksheets/generate. */
 export type GenerateWorksheetRequest = {
   classId: string;
+  subjectId: string;
   topicId: string;
+  difficulty: Difficulty;
   questionCount: number;
 };
 
@@ -17,8 +21,10 @@ export type Question = {
 export type GenerateWorksheetResponse = {
   questions: Question[];
   metadata: {
-    topicId: string;
     classId: string;
+    subjectId: string;
+    topicId: string;
+    difficulty: Difficulty;
     questionCount: number;
     /** ISO 8601 timestamp of generation. */
     generated: string;

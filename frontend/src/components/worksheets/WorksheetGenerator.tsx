@@ -8,6 +8,11 @@ import WorksheetPreview from "./WorksheetPreview";
 import { COLORS, TYPOGRAPHY } from "@/constants";
 import { curriculum, difficulties, mockQuestions } from "@/lib/worksheets/mock-data";
 import { generateWorksheet } from "@/lib/worksheets/generateWorksheet";
+import {
+  generateWorksheetViaAPI,
+  getApiQuestionCounts,
+  usesGenerationApi,
+} from "@/lib/worksheets/client";
 import type { Worksheet, WorksheetConfig } from "@/lib/worksheets/types";
 
 type WorksheetFormValues = Omit<WorksheetConfig, "difficulty" | "questionCount"> & {
@@ -62,8 +67,10 @@ export default function WorksheetGenerator() {
   const selectedTopic = selectedSubject?.topics.find(
     (item) => item.id === values.topicId,
   );
-  // The current mock bank contains unique questions for each configuration.
-  const availableCount = selectedTopic && values.difficulty
+  const useApi = usesGenerationApi(values.classId, values.subjectId);
+  const apiCounts = getApiQuestionCounts();
+  // The mock bank contains unique questions for each Class 3 configuration.
+  const mockCount = selectedTopic && values.difficulty
     ? mockQuestions.filter(
         (question) =>
           question.classId === values.classId &&
@@ -72,10 +79,15 @@ export default function WorksheetGenerator() {
           question.difficulty === values.difficulty,
       ).length
     : 0;
+  const countOptions: readonly number[] = !selectedTopic || !values.difficulty
+    ? []
+    : useApi
+      ? apiCounts
+      : Array.from({ length: mockCount }, (_, index) => index + 1);
   const isComplete = Boolean(
     selectedTopic && values.difficulty && values.questionCount !== "" &&
     Number.isSafeInteger(values.questionCount) &&
-    values.questionCount > 0 && values.questionCount <= availableCount,
+    countOptions.includes(values.questionCount),
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -92,11 +104,14 @@ export default function WorksheetGenerator() {
     setGeneration({ status: "generating" });
 
     try {
-      const worksheet = await generateWorksheet({
+      const config: WorksheetConfig = {
         ...values,
         difficulty: values.difficulty,
         questionCount: values.questionCount,
-      });
+      };
+      const worksheet = usesGenerationApi(config.classId, config.subjectId)
+        ? await generateWorksheetViaAPI(config)
+        : await generateWorksheet(config);
       if (activeRequest.current === requestId) {
         setGeneration({ status: "success", worksheet });
       }
@@ -211,7 +226,7 @@ export default function WorksheetGenerator() {
               id="worksheet-count"
               name="questionCount"
               required
-              disabled={availableCount === 0}
+              disabled={countOptions.length === 0}
               aria-describedby="worksheet-count-help"
               value={values.questionCount}
               className={selectClassName}
@@ -220,23 +235,25 @@ export default function WorksheetGenerator() {
               })}
             >
               <option value="">Select a question count</option>
-              {Array.from({ length: availableCount }, (_, index) => index + 1).map((count) => (
+              {countOptions.map((count) => (
                 <option key={count} value={count}>{count}</option>
               ))}
             </select>
             <p id="worksheet-count-help" className={helpClassName} aria-live="polite">
               {!selectedTopic || !values.difficulty
                 ? "Choose a class, subject, topic, and difficulty to enable Question Count."
-                : availableCount > 0
-                  ? `Choose up to ${availableCount} questions for this selection.`
-                  : "No sample questions are available for this selection."}
+                : countOptions.length === 0
+                  ? "No questions are available for this selection."
+                  : useApi
+                    ? `Choose ${countOptions.join(", ")} questions for this selection.`
+                    : `Choose up to ${countOptions.length} questions for this selection.`}
             </p>
           </div>
         </div>
 
         <div className="mt-8 border-t border-white/10 pt-6">
           <p id="worksheet-generation-note" className={`mb-4 ${COLORS.text.secondary}`}>
-            Generate a worksheet from our sample questions. Changing any setting clears the preview.
+            Generate a worksheet for your selection. Changing any setting clears the preview.
           </p>
           <Button
             type="submit"
