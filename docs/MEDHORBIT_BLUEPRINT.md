@@ -1,7 +1,7 @@
 # MedhOrbit --- Product & Architecture Blueprint
 
 **Status:** Approved development direction\
-**Version:** 1.0\
+**Version:** 1.1 (post-Phase 8; checkpoint `5a64055`)\
 **Purpose:** Persistent architectural reference for humans and AI coding
 assistants\
 **Tagline:** Learn Smarter. Grow Brighter.
@@ -71,21 +71,54 @@ Print / PDF
 
 ## 5. Current implementation checkpoint
 
-Completed: - Next.js/React/TypeScript/Tailwind foundation - Responsive
-landing-page foundation - Button, Card, Container, Section - Navbar,
-Footer, Hero, Features - Design tokens/constants - Worksheet domain
-types - Small local curriculum catalog - Mock questions -
-`generateWorksheet(config)` boundary
+Phases 0--8 are complete. Latest recorded checkpoint: `5a64055` ---
+`Phase 8B: Refine prompts for ambiguous topics` (Phase 8C was a
+verification run and produced no commit).
 
-Phase 2A `/worksheets` configuration UI has been implemented locally and
-is awaiting its final review/commit lifecycle at the time this blueprint
-was written.
+Completed:
 
-Approved Git checkpoints: - `c7e9303` ---
-`Build MedhOrbit landing page foundation` - `1998d53` ---
-`Add worksheet generator domain and mock generation`
+- Phase 0 --- Foundation (Next.js/React/TypeScript/Tailwind, landing
+  page, design tokens)
+- Phase 1 --- Domain + mock generator (`generateWorksheet(config)`)
+- Phase 2 --- Configuration UI
+- Phase 3 --- Generate + preview
+- Phase 4 --- Answer key
+- Phase 5 --- Print / Save as PDF
+- Phase 6A --- Class 5 Mathematics curriculum/catalog
+- Phase 6B --- API/schema boundary
+- Phase 6C --- Anthropic provider integration
+- Phase 6D --- Class 3 mock + Class 5 AI dual path
+- Phase 7A --- AI quality validation (batched evaluation)
+- Phase 7B --- One controlled regeneration on quality failure
+- Phase 7C --- Logical consistency, grade/difficulty and
+  semantic-redundancy hardening
+- Phase 7 regression harness --- 7 zero-cost tests against real
+  production logic
+- Phase 8A --- Curriculum audit
+- Phase 8B --- Topic-specific prompt context
+- Phase 8C --- Controlled real verification
 
-`1998d53` was pushed to `origin/main` before Phase 2A began.
+Phase 8C evidence (`class-5 / mathematics / data-interpretation / easy /
+5`):
+
+- HTTP 200, 5 questions returned
+- All answers manually verified correct
+- All questions self-contained; no external image/chart required
+- No obvious semantic duplicates
+- No Phase 7B retry triggered
+- Approximately 2 Anthropic calls
+
+Caveat: this test did NOT directly verify the separate `pictographs`
+topic. One data-interpretation question happened to use pictograph-style
+data.
+
+Cost/testing strategy:
+
+- Normal AI generation: 1 generation + 1 batched evaluation ≈ 2
+  Anthropic calls
+- Worst case with one quality retry: maximum ≈ 4 calls
+- Normal regression: `npm run test:worksheets` --- 7 tests, 0 Anthropic
+  calls
 
 Always inspect current Git history/status rather than assuming this
 checkpoint is still latest.
@@ -199,13 +232,21 @@ Curriculum
                     └── Topic
 ```
 
-The current mock catalog is intentionally tiny: - Class 3 -
-Mathematics - Addition / Multiplication - Easy / Medium / Hard - Small
-supported question counts
+The catalog currently has two paths:
 
-It is a technical proof, not the production curriculum. After the
-end-to-end workflow is proven, Class 5 is the preferred first meaningful
-curriculum pilot.
+- **Class 3 Mathematics** --- the deterministic mock/regression path.
+  It is intentionally tiny (Addition / Multiplication, Easy / Medium /
+  Hard, small supported question counts) and continues to use its
+  existing local mock question bank. It is a technical proof, not the
+  production curriculum.
+- **Class 5 Mathematics** --- the AI-generation pilot curriculum, based
+  on *Maths Mela --- Textbook of Mathematics for Grade 5*. The catalog
+  currently contains 15 chapters and 49 topics, with Easy / Medium /
+  Hard difficulty and supported AI worksheet counts of 5, 10, and 15.
+  Class 5 questions are AI-generated (with quality validation), not
+  mock questions.
+
+No other classes or subjects are in the catalog.
 
 ## 10. Worksheet Generator UI rules
 
@@ -403,13 +444,13 @@ Introduce Docker and more complex infrastructure only when justified.
   ------- -------------------------------------- ------------------
   0       Project/design foundation              Complete
   1       Worksheet domain + mock generator      Complete
-  2       Worksheet configuration UI             In progress
-  3       Generate + worksheet preview           Planned
-  4       Answer key                             Planned
-  5       Print/PDF                              Planned
-  6       Real AI generation                     Planned
-  7       AI quality-validation layer            Planned
-  8       Expand meaningful Class 5 curriculum   Planned
+  2       Worksheet configuration UI             Complete
+  3       Generate + worksheet preview           Complete
+  4       Answer key                             Complete
+  5       Print/PDF                              Complete
+  6       Real AI generation (6A--6D)            Complete
+  7       AI quality-validation layer (7A--7C)   Complete
+  8       Class 5 curriculum (8A--8C)            Complete
   9       Persistence/accounts                   Planned
   10      Practice + assessment                  Planned
   11      Progress + weak-topic detection        Planned
@@ -502,24 +543,15 @@ merely making the architecture look sophisticated?
 
 ## 25. Immediate continuation point
 
-At blueprint creation:
+Phases 0--8 are complete. The next roadmap phase is:
 
 ``` text
-Phase 2A — Worksheet Configuration UI
-        ↓
-Commit-gate review
-        ↓
-Commit + Push
-        ↓
-Phase 3 — connect generateWorksheet()
-        ↓
-WorksheetPreview
-        ↓
-End-to-end mock workflow
+Phase 9 — Persistence/accounts
 ```
 
-Only after the mock workflow is usable end-to-end should development
-move toward answer keys, print/PDF, and real AI.
+Database/auth, progress tracking, personalized practice, AI tutoring,
+multi-subject expansion, RAG and school features remain future work per
+the roadmap in section 20. Confirm Phase 9 scope before starting it.
 
 ## 26. Prompt for future ChatGPT/Codex sessions
 
