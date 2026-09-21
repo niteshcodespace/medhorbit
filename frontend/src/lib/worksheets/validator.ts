@@ -1,6 +1,9 @@
 import { evaluateWorksheetQuality, ProviderError } from "./provider";
 import type { Difficulty } from "./types";
 
+/** Sends the evaluation prompt to the quality evaluator; injectable for tests. */
+export type QualityEvaluator = typeof evaluateWorksheetQuality;
+
 /** A single problem found while validating a generated worksheet. */
 export type ValidationIssue = {
   questionIndex?: number;
@@ -308,12 +311,15 @@ function parseEvaluatorResponse(text: string, expectedCount: number): EvaluatorP
  * heuristic on top of the deterministic checks, not proof of correctness -
  * treat "invalid" verdicts as signals worth rejecting on, not certainties.
  */
-async function runAiQualityEvaluation(input: WorksheetValidationInput): Promise<ValidationIssue[]> {
+async function runAiQualityEvaluation(
+  input: WorksheetValidationInput,
+  evaluator: QualityEvaluator,
+): Promise<ValidationIssue[]> {
   const prompt = buildEvaluationPrompt(input);
 
   let text: string;
   try {
-    text = await evaluateWorksheetQuality(prompt);
+    text = await evaluator(prompt);
   } catch (error) {
     const kind = error instanceof ProviderError ? error.kind : "unknown";
     console.error("[worksheets/validator] quality evaluation call failed:", kind);
@@ -413,6 +419,7 @@ async function runAiQualityEvaluation(input: WorksheetValidationInput): Promise<
  */
 export async function validateWorksheet(
   input: WorksheetValidationInput,
+  evaluator: QualityEvaluator = evaluateWorksheetQuality,
 ): Promise<WorksheetValidationResult> {
   const deterministicIssues = runDeterministicChecks(input.questions);
   const hasCriticalDeterministicIssue = deterministicIssues.some((issue) => issue.severity === "error");
@@ -421,7 +428,7 @@ export async function validateWorksheet(
     return { isValid: false, issues: deterministicIssues };
   }
 
-  const aiIssues = await runAiQualityEvaluation(input);
+  const aiIssues = await runAiQualityEvaluation(input, evaluator);
   const issues = [...deterministicIssues, ...aiIssues];
   return { isValid: !issues.some((issue) => issue.severity === "error"), issues };
 }

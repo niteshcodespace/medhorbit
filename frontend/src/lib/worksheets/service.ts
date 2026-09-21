@@ -89,11 +89,11 @@ function parseQuestions(
 // nothing, per Phase 7B's "system failure vs quality failure" distinction.
 const SYSTEM_FAILURE_CODES = new Set(["evaluator_malformed", "evaluator_count_mismatch"]);
 
-function isSystemFailure(validation: Awaited<ReturnType<typeof validateWorksheet>>): boolean {
+export function isSystemFailure(validation: Awaited<ReturnType<typeof validateWorksheet>>): boolean {
   return validation.issues.some((issue) => issue.severity === "error" && SYSTEM_FAILURE_CODES.has(issue.code));
 }
 
-const MAX_GENERATION_ATTEMPTS = 2;
+export const MAX_GENERATION_ATTEMPTS = 2;
 const RETRY_HINT = "\n\nThis is a retry attempt. Generate a different set of questions.";
 
 /**

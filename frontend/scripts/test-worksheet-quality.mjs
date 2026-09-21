@@ -1,11 +1,13 @@
 // Compiles the worksheet modules to a temp dir with the project's own TypeScript
 // and runs the zero-cost regression tests. Makes no network or API calls.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 
-const outDir = mkdtempSync(path.join(tmpdir(), "worksheet-tests-"));
+// Inside node_modules so compiled output resolves the project's dependencies.
+const cacheDir = path.resolve("node_modules/.cache");
+mkdirSync(cacheDir, { recursive: true });
+const outDir = mkdtempSync(path.join(cacheDir, "worksheet-tests-"));
 let code = 1;
 try {
   const tsc = spawnSync(
