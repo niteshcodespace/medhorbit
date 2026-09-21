@@ -23,6 +23,20 @@ export class WorksheetGenerationError extends Error {
   }
 }
 
+/** Extra generation guidance for topics whose label alone is ambiguous. */
+const TOPIC_CONTEXT: Record<string, string> = {
+  "real-world-math":
+    "Topic context: use practical Dairy Farm mathematics scenarios (milk quantities, costs, measurements, and basic operations on them). Avoid unrelated generic real-world scenarios.",
+  "practical-applications":
+    "Topic context: use Coconut Farm problem-solving scenarios (harvesting, distribution, quantities, and practical calculations). Keep each task clear and appropriate for Class 5.",
+  "data-interpretation":
+    "Topic context: embed all required data directly in the question text, using explicit values, lists, or textual table-style data. Do not depend on any external image or chart.",
+  "graphs-reading":
+    "Topic context: describe any graph textually using explicit coordinates, values, rows/columns, or data points. Do not depend on any external graph or image.",
+  pictographs:
+    "Topic context: state the pictograph scale explicitly in the text (for example, 1 symbol = 10 items) and give every quantity needed to solve the question. Do not depend on rendered icons or images.",
+};
+
 /** Builds the generation prompt from catalog labels; no textbook content. */
 function buildPrompt(
   request: GenerateWorksheetRequest,
@@ -39,6 +53,7 @@ function buildPrompt(
     "",
     `Write exactly ${request.questionCount} original questions on this topic, suitable for the class and difficulty above.`,
     "Each question must be self-contained, use plain text only, and have a short correct answer.",
+    ...(TOPIC_CONTEXT[request.topicId] ? [TOPIC_CONTEXT[request.topicId]] : []),
     'Respond with JSON only, in the form {"questions":[{"prompt":"...","answer":"..."}]}.',
   ].join("\n");
 }
