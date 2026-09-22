@@ -63,10 +63,14 @@ export async function generateWorksheet(
   }
 
   // Fixed bank order makes the mock deterministic. Copies isolate each result.
+  // The mock bank has no stored generation time of its own, so capture one
+  // here, when the worksheet is actually generated - never substitute save
+  // time for it later.
   return {
     config: { ...config },
     questions: questions.slice(0, config.questionCount).map((question) => ({
       ...question,
     })),
+    generatedAt: new Date().toISOString(),
   };
 }

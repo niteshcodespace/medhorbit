@@ -44,7 +44,9 @@ function toWorksheet(data: unknown, request: ApiRequest): Worksheet {
     metadata.topicId !== request.topicId ||
     metadata.difficulty !== request.difficulty ||
     !difficulties.includes(metadata.difficulty) ||
-    questions.length !== request.questionCount
+    questions.length !== request.questionCount ||
+    !isNonEmptyString(metadata.generated) ||
+    Number.isNaN(Date.parse(metadata.generated))
   ) {
     throw new Error("invalid");
   }
@@ -71,7 +73,9 @@ function toWorksheet(data: unknown, request: ApiRequest): Worksheet {
   });
 
   const config: WorksheetConfig = { ...request };
-  return { config, questions: mapped };
+  // Preserve the server's own generation timestamp - never substitute the
+  // time this response was received/saved for it.
+  return { config, questions: mapped, generatedAt: metadata.generated };
 }
 
 export async function generateWorksheetViaAPI(request: ApiRequest): Promise<Worksheet> {

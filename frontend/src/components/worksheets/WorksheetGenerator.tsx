@@ -26,6 +26,14 @@ type GenerationState =
   | { status: "success"; worksheet: Worksheet }
   | { status: "error"; message: string };
 
+type SaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  | { status: "saved"; id: string }
+  | { status: "error"; message: string };
+
+const SAVE_ERROR_MESSAGE = "Failed to save worksheet. Please try again.";
+
 const selectClassName =
   "mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60";
 const helpClassName = `mt-2 ${TYPOGRAPHY.small} ${COLORS.text.secondary}`;
@@ -39,6 +47,7 @@ export default function WorksheetGenerator() {
     questionCount: "",
   });
   const [generation, setGeneration] = useState<GenerationState>({ status: "idle" });
+  const [save, setSave] = useState<SaveState>({ status: "idle" });
   const nextRequest = useRef(0);
   const activeRequest = useRef<number | null>(null);
   const previewHeading = useRef<HTMLHeadingElement>(null);
@@ -58,6 +67,7 @@ export default function WorksheetGenerator() {
     activeRequest.current = null;
     setValues(nextValues);
     setGeneration({ status: "idle" });
+    setSave({ status: "idle" });
   }
 
   const selectedClass = curriculum.find((item) => item.id === values.classId);
@@ -102,6 +112,7 @@ export default function WorksheetGenerator() {
     const requestId = ++nextRequest.current;
     activeRequest.current = requestId;
     setGeneration({ status: "generating" });
+    setSave({ status: "idle" });
 
     try {
       const config: WorksheetConfig = {
@@ -126,6 +137,39 @@ export default function WorksheetGenerator() {
       }
     } finally {
       if (activeRequest.current === requestId) activeRequest.current = null;
+    }
+  }
+
+  async function handleSave() {
+    if (generation.status !== "success" || save.status === "saving" || save.status === "saved") return;
+    const { config, questions, generatedAt } = generation.worksheet;
+    setSave({ status: "saving" });
+    try {
+      const response = await fetch("/api/worksheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: config.classId,
+          subjectId: config.subjectId,
+          topicId: config.topicId,
+          difficulty: config.difficulty,
+          questionCount: config.questionCount,
+          questions: questions.map((question) => ({
+            id: question.id,
+            prompt: question.prompt,
+            type: "short-answer",
+            answer: question.answer,
+          })),
+          generatedAt,
+        }),
+      });
+      if (!response.ok) throw new Error("save failed");
+      const body = await response.json();
+      const id = body?.data?.id;
+      if (typeof id !== "string" || id === "") throw new Error("save failed");
+      setSave({ status: "saved", id });
+    } catch {
+      setSave({ status: "error", message: SAVE_ERROR_MESSAGE });
     }
   }
 
@@ -283,11 +327,24 @@ export default function WorksheetGenerator() {
     </div>
     {generation.status === "success" && (
       <>
-      <div className="worksheet-screen-only">
+      <div className="worksheet-screen-only flex flex-wrap gap-4">
         <Button type="button" onClick={() => window.print()} className="w-full sm:w-auto">
           Print / Save as PDF
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleSave}
+          disabled={save.status === "saving" || save.status === "saved"}
+          aria-describedby="worksheet-save-note"
+          className="w-full sm:w-auto"
+        >
+          {save.status === "saving" ? "Saving..." : save.status === "saved" ? "Saved" : "Save Worksheet"}
+        </Button>
       </div>
+      <p id="worksheet-save-note" role="alert" className="worksheet-screen-only mt-2 text-red-300">
+        {save.status === "error" ? save.message : ""}
+      </p>
       <WorksheetPreview worksheet={generation.worksheet} headingRef={previewHeading} />
       </>
     )}

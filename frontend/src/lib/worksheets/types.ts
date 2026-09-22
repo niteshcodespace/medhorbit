@@ -38,4 +38,6 @@ export type Question = {
 export type Worksheet = {
   config: WorksheetConfig;
   questions: Question[];
+  /** ISO 8601 timestamp of when the questions were generated (not saved). */
+  generatedAt: string;
 };
