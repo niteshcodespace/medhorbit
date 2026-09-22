@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Container from "@/components/common/Container";
 import Section from "@/components/common/Section";
 import Footer from "@/components/layout/Footer";
@@ -29,10 +30,15 @@ export default function WorksheetsPage() {
               <h1 id="worksheets-title" className={`worksheet-screen-only ${TYPOGRAPHY.sectionTitle}`}>
                 Worksheet Generator
               </h1>
-              <p className={`worksheet-screen-only mt-4 mb-8 ${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
+              <p className={`worksheet-screen-only mt-4 mb-4 ${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
                 Choose your worksheet settings from our small sample curriculum.
                 All fields are required.
               </p>
+              <Link href="/worksheets/saved" className="worksheet-screen-only mb-8 inline-block">
+                <span className={`${TYPOGRAPHY.small} underline ${COLORS.text.secondary} hover:text-white`}>
+                  My Worksheets
+                </span>
+              </Link>
               <WorksheetGenerator />
             </div>
           </Container>

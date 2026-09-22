@@ -18,6 +18,7 @@ try {
       "src/lib/worksheets/memory-repository.ts",
       "src/lib/worksheets/postgres-repository.ts",
       "src/lib/worksheets/save-validator.ts",
+      "src/lib/worksheets/saved-client.ts",
       "--outDir", outDir,
       "--module", "commonjs",
       "--moduleResolution", "node",
@@ -36,6 +37,7 @@ try {
         "tests/worksheets/quality.regression.test.mjs",
         "tests/worksheets/persistence.test.mjs",
         "tests/worksheets/api-persistence.test.mjs",
+        "tests/worksheets/saved-worksheets.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
