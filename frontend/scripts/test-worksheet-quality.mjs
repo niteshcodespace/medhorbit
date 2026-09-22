@@ -17,6 +17,7 @@ try {
       "src/lib/worksheets/service.ts",
       "src/lib/worksheets/memory-repository.ts",
       "src/lib/worksheets/postgres-repository.ts",
+      "src/lib/worksheets/save-validator.ts",
       "--outDir", outDir,
       "--module", "commonjs",
       "--moduleResolution", "node",
@@ -30,7 +31,12 @@ try {
   if (tsc.status === 0) {
     const run = spawnSync(
       process.execPath,
-      ["--test", "tests/worksheets/quality.regression.test.mjs", "tests/worksheets/persistence.test.mjs"],
+      [
+        "--test",
+        "tests/worksheets/quality.regression.test.mjs",
+        "tests/worksheets/persistence.test.mjs",
+        "tests/worksheets/api-persistence.test.mjs",
+      ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
     code = run.status ?? 1;
