@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import PrintButton from "./PrintButton";
 import WorksheetPreview from "./WorksheetPreview";
 import { COLORS, TYPOGRAPHY } from "@/constants";
 import { curriculum, difficulties, mockQuestions } from "@/lib/worksheets/mock-data";
@@ -328,9 +329,7 @@ export default function WorksheetGenerator() {
     {generation.status === "success" && (
       <>
       <div className="worksheet-screen-only flex flex-wrap gap-4">
-        <Button type="button" onClick={() => window.print()} className="w-full sm:w-auto">
-          Print / Save as PDF
-        </Button>
+        <PrintButton />
         <Button
           type="button"
           variant="outline"

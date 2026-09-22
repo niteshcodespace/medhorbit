@@ -38,6 +38,7 @@ try {
         "tests/worksheets/persistence.test.mjs",
         "tests/worksheets/api-persistence.test.mjs",
         "tests/worksheets/saved-worksheets.test.mjs",
+        "tests/worksheets/saved-worksheet-detail.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );

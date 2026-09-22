@@ -96,7 +96,17 @@ export default function SavedWorksheetsList() {
         return (
           <li key={worksheet.id}>
             <Card>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <h2 className="font-semibold">
+                  <Link href={`/worksheets/saved/${worksheet.id}`} className="underline hover:text-white">
+                    {subjectLabel}: {topicLabel}
+                  </Link>
+                </h2>
+                <Link href={`/worksheets/saved/${worksheet.id}`}>
+                  <Button type="button" variant="outline" size="sm">Open Worksheet</Button>
+                </Link>
+              </div>
+              <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <dt className={COLORS.text.secondary}>Class</dt>
                   <dd className="font-semibold">{classLabel}</dd>
