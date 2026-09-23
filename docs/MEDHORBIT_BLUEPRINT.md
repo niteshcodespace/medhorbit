@@ -1,10 +1,15 @@
 # MedhOrbit --- Product & Architecture Blueprint
 
 **Status:** Approved development direction\
-**Version:** 1.1 (post-Phase 8; checkpoint `5a64055`)\
+**Version:** 1.2 (post-Phase 9C; checkpoint `fe3c3bf`)\
 **Purpose:** Persistent architectural reference for humans and AI coding
 assistants\
 **Tagline:** Learn Smarter. Grow Brighter.
+
+Phase 9C-4 was a verification-only pass (full end-to-end regression of
+the Phase 9C persistence UI) and produced no commit, so `fe3c3bf` ---
+`Phase 9C-3: Add saved worksheet reopen flow` remains the latest
+implementation checkpoint.
 
 ## 1. Purpose
 
@@ -71,9 +76,11 @@ Print / PDF
 
 ## 5. Current implementation checkpoint
 
-Phases 0--8 are complete. Latest recorded checkpoint: `5a64055` ---
-`Phase 8B: Refine prompts for ambiguous topics` (Phase 8C was a
-verification run and produced no commit).
+Phases 0--9C are complete. Latest implementation checkpoint: `fe3c3bf`
+--- `Phase 9C-3: Add saved worksheet reopen flow` (Phase 9C-4 was a
+full end-to-end verification run and produced no commit; see its
+evidence below). **Phase 9D (authentication/accounts) is next and has
+not started.**
 
 Completed:
 
@@ -97,6 +104,11 @@ Completed:
 - Phase 8A --- Curriculum audit
 - Phase 8B --- Topic-specific prompt context
 - Phase 8C --- Controlled real verification
+- Phase 9B --- Persistence backend (Docker PostgreSQL, migration +
+  connection pool, `WorksheetRepository`, anonymous ownership cookie,
+  save/list/get APIs) --- **complete**
+- Phase 9C --- Persistence UI (Save Worksheet, My Worksheets, reopen +
+  shared print flow, full end-to-end verification) --- **complete**
 
 Phase 8C evidence (`class-5 / mathematics / data-interpretation / easy /
 5`):
@@ -112,13 +124,117 @@ Caveat: this test did NOT directly verify the separate `pictographs`
 topic. One data-interpretation question happened to use pictograph-style
 data.
 
+### Phase 9B --- persistence backend (architecture)
+
+Local development:
+
+``` text
+Next.js → PostgreSQL in Docker → localhost:5433
+```
+
+Production direction (not yet built): a managed PostgreSQL instance
+replaces the local Docker container; the application-level persistence
+architecture below does not change.
+
+Persistence architecture:
+
+``` text
+API routes
+   ↓
+Anonymous httpOnly ownership cookie
+   ↓
+WorksheetRepository
+   ↓
+PostgreSQL
+```
+
+The `worksheets` table currently stores, per saved worksheet:
+
+- UUID `id`
+- anonymous ownership id (httpOnly cookie value, server-generated;
+  never a user account)
+- `classId`
+- `subjectId`
+- `topicId`
+- `difficulty`
+- question count
+- `questions` --- a frozen JSONB snapshot of the exact generated
+  questions/answers
+- `generatedAt`
+- `savedAt`
+
+No authentication exists yet. Ownership is an opaque anonymous cookie
+only --- see section 16.
+
+### Phase 9C --- persistence UI (capabilities)
+
+Users can now:
+
+``` text
+Generate Worksheet
+   ↓
+Save Worksheet
+   ↓
+My Worksheets
+   ↓
+Reopen exact saved worksheet
+   ↓
+View Answer Key
+   ↓
+Print / Save as PDF
+```
+
+Important behavior:
+
+- Reopening a saved worksheet does not regenerate it and costs 0
+  Anthropic calls --- the stored JSONB snapshot is rendered as-is, with
+  no re-validation.
+- Saved worksheets are immutable snapshots; there is no edit or
+  regenerate-in-place.
+- The My Worksheets list shows metadata only (class, subject, topic,
+  difficulty, question count, saved time) --- never questions or
+  answers.
+- Exact questions/answers are returned only by the single-worksheet
+  detail endpoint/page.
+- Anonymous ownership is enforced server-side (repository query), not
+  merely in the UI.
+- A wrong or missing ownership cookie returns a safe 404 ("Worksheet
+  not found") --- it never distinguishes "does not exist" from
+  "belongs to someone else."
+
+### Phase 9C-4 verification evidence
+
+Full end-to-end regression of the Phase 9C persistence flow, executed
+against local Docker PostgreSQL with Class 3 deterministic generation
+only:
+
+- 51/51 worksheet tests pass (`npm run test:worksheets`)
+- TypeScript clean (`npx tsc --noEmit`)
+- Lint clean
+- `git diff --check` clean
+- Class 3 deterministic end-to-end passed: Generate → Save → My
+  Worksheets → Reopen → Answer Key → Print readiness
+- Ownership isolation passed (correct cookie, no cookie, different
+  cookie, different-cookie list --- all behaved safely)
+- PostgreSQL JSONB/timestamp integrity passed (stored snapshot matches
+  the API response exactly; `generatedAt` and `savedAt` are distinct)
+- Print DOM/CSS readiness verified (shared print container/classes,
+  answer key included, no duplicate print implementation)
+- 0 Anthropic calls
+- Database returned to its pre-test baseline row count
+- No code changes were required; no commit for Phase 9C-4
+
 Cost/testing strategy:
 
 - Normal AI generation: 1 generation + 1 batched evaluation ≈ 2
   Anthropic calls
 - Worst case with one quality retry: maximum ≈ 4 calls
-- Normal regression: `npm run test:worksheets` --- 7 tests, 0 Anthropic
-  calls
+- Normal regression: `npm run test:worksheets` --- 51 tests, 0
+  Anthropic calls (worksheet generation/quality regression plus
+  worksheet persistence, save/list/get API, and saved-worksheet
+  reopen coverage)
+- Saving, listing, and reopening a worksheet never call the Anthropic
+  provider
 
 Always inspect current Git history/status rather than assuming this
 checkpoint is still latest.
@@ -332,18 +448,26 @@ AI stage:
 Next.js → Server/API boundary → AI provider
 ```
 
-Persistence stage:
+Persistence stage (**implemented, Phase 9B/9C** --- worksheet save/list/
+reopen only; see section 5 for the full architecture and table shape):
 
 ``` text
 Frontend
    ↓
-Application API
-   ├── AI
-   └── PostgreSQL
+Application API routes
+   ├── AI provider
+   └── WorksheetRepository → PostgreSQL
 ```
 
-Introduce persistence when users, saved worksheets, student profiles,
-attempts, answers, progress, or weak-topic analysis require it.
+Local development runs PostgreSQL 16 in Docker on `localhost:5433`;
+production is expected to point the same repository/pool boundary at a
+managed PostgreSQL instance later, with no change to the API/repository
+contract.
+
+Persistence beyond a saved worksheet snapshot --- user accounts, student
+profiles, attempts, answers, progress, or weak-topic analysis --- is
+still future work; introduce each piece only when it is genuinely
+required.
 
 Conceptual future data flow:
 
@@ -396,9 +520,20 @@ Content ingestion must respect applicable licensing requirements.
 
 ## 16. Authentication
 
-Postpone authentication until user-specific persistence is useful, such
-as saved worksheets, profiles, history, progress, teacher accounts, or
-subscriptions.
+**Not yet implemented.** Phase 9B/9C's saved-worksheet persistence uses
+only an opaque, server-generated, httpOnly anonymous ownership cookie
+(no email, password, or account) to scope save/list/get to "this
+browser," not to a real user identity. This was deliberately the
+smallest thing that made saving/reopening a worksheet useful without
+building accounts prematurely.
+
+Postpone *real* authentication until persistence needs to survive
+across devices/browsers, or until profiles, history, progress, teacher
+accounts, or subscriptions require an actual identity. Phase 9D is the
+next roadmap phase and is where that decision gets made (see section
+25): the auth technology has not been chosen yet, do not implement
+authentication automatically, and design the minimal account/auth
+approach first.
 
 ## 17. Print / PDF
 
@@ -436,7 +571,9 @@ CI/CD
      Deploy
 ```
 
-Introduce Docker and more complex infrastructure only when justified.
+Local development already uses Docker for PostgreSQL (section 13); CI/CD
+pipeline infrastructure and more complex deployment tooling are still
+introduced only when justified.
 
 ## 20. Development roadmap
 
@@ -451,7 +588,10 @@ Introduce Docker and more complex infrastructure only when justified.
   6       Real AI generation (6A--6D)            Complete
   7       AI quality-validation layer (7A--7C)   Complete
   8       Class 5 curriculum (8A--8C)            Complete
-  9       Persistence/accounts                   Planned
+  9A      Persistence/accounts architecture      Complete
+  9B      Persistence backend (9B-1--9B-4)       Complete
+  9C      Persistence UI (9C-1--9C-4)            Complete
+  9D      Authentication/accounts                Next
   10      Practice + assessment                  Planned
   11      Progress + weak-topic detection        Planned
   12      Personalized worksheets                Planned
@@ -543,15 +683,20 @@ merely making the architecture look sophisticated?
 
 ## 25. Immediate continuation point
 
-Phases 0--8 are complete. The next roadmap phase is:
+Phases 0--9C are complete. The next decision is:
 
 ``` text
-Phase 9 — Persistence/accounts
+Phase 9D — Authentication/accounts
 ```
 
-Database/auth, progress tracking, personalized practice, AI tutoring,
-multi-subject expansion, RAG and school features remain future work per
-the roadmap in section 20. Confirm Phase 9 scope before starting it.
+Authentication technology has **not** been chosen yet. Do not implement
+authentication automatically. First design the minimal account/auth
+approach (what it needs to unlock, what it must not become) before
+writing any auth code --- see section 16.
+
+Progress tracking, personalized practice, AI tutoring, multi-subject
+expansion, RAG and school features remain future work per the roadmap
+in section 20. Confirm Phase 9D scope before starting it.
 
 ## 26. Prompt for future ChatGPT/Codex sessions
 
