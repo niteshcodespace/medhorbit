@@ -61,6 +61,30 @@ export class PostgresWorksheetRepository implements WorksheetRepository {
     return toSavedWorksheet(rows[0]);
   }
 
+  async saveForOwner(
+    input: SaveWorksheetInput,
+    ownerId: string,
+  ): Promise<SavedWorksheet> {
+    const { rows } = await this.pool.query<WorksheetRow>(
+      `INSERT INTO worksheets (anonymous_id, owner_id, class_id, subject_id, topic_id,
+         difficulty, question_count, questions, generated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+       RETURNING ${COLUMNS}`,
+      [
+        input.anonymousId,
+        ownerId,
+        input.classId,
+        input.subjectId,
+        input.topicId,
+        input.difficulty,
+        input.questionCount,
+        JSON.stringify(input.questions),
+        input.generatedAt,
+      ],
+    );
+    return toSavedWorksheet(rows[0]);
+  }
+
   async listByAnonymousId(anonymousId: string): Promise<SavedWorksheet[]> {
     const { rows } = await this.pool.query<WorksheetRow>(
       `SELECT ${COLUMNS} FROM worksheets

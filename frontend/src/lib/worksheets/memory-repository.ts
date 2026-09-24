@@ -33,15 +33,22 @@ export class InMemoryWorksheetRepository implements WorksheetRepository {
     return snapshot(saved);
   }
 
+  async saveForOwner(
+    input: SaveWorksheetInput,
+    ownerId: string,
+  ): Promise<SavedWorksheet> {
+    const saved: SavedWorksheet = { ...input, id: randomUUID(), savedAt: this.now() };
+    this.rows.push({ worksheet: snapshot(saved), ownerId });
+    return snapshot(saved);
+  }
+
   /**
-   * Test-only fixture helper: inserts a worksheet already owned by an
-   * account, without going through save() (which never sets an owner).
+   * Test-only alias, kept for existing test fixtures written before
+   * saveForOwner became a production repository method.
    * Not part of WorksheetRepository - for repository tests only.
    */
   saveOwnedForTest(input: SaveWorksheetInput, ownerId: string): Promise<SavedWorksheet> {
-    const saved: SavedWorksheet = { ...input, id: randomUUID(), savedAt: this.now() };
-    this.rows.push({ worksheet: snapshot(saved), ownerId });
-    return Promise.resolve(snapshot(saved));
+    return this.saveForOwner(input, ownerId);
   }
 
   async listByAnonymousId(anonymousId: string): Promise<SavedWorksheet[]> {

@@ -18,6 +18,15 @@ export interface WorksheetRepository {
   /** Persists a snapshot and returns it with its generated id and savedAt. */
   save(input: SaveWorksheetInput): Promise<SavedWorksheet>;
   /**
+   * Persists a snapshot already owned by an authenticated account, in one
+   * step (no separate save() + claim). `input` still carries the browser's
+   * anonymousId, unchanged by this method - the schema requires it and this
+   * phase does not redesign that. `ownerId` must come only from trusted
+   * server-side context (e.g. the authenticated session's user id), never
+   * from the worksheet payload or any other client-supplied value.
+   */
+  saveForOwner(input: SaveWorksheetInput, ownerId: string): Promise<SavedWorksheet>;
+  /**
    * Worksheets owned by the anonymous id, newest saved first. Only
    * unclaimed rows (owner_id IS NULL) are visible here - once a worksheet
    * is claimed by an account, its old anonymous cookie can no longer see

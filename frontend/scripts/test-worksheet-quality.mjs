@@ -44,6 +44,7 @@ try {
         "tests/worksheets/ownership.test.mjs",
         "tests/worksheets/claim.test.mjs",
         "tests/worksheets/claim-on-session.test.mjs",
+        "tests/worksheets/authenticated-save.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
