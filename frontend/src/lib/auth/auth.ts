@@ -15,12 +15,13 @@ import { getPool } from "@/lib/db/pool";
  * - IP address capture disabled and OAuth tokens encrypted at rest -
  *   deliberate data-minimization choices for Phase 9D, not defaults.
  *
- * Google sign-in is intentionally NOT wired yet (Phase 9D-1B). Better
- * Auth's core schema (user/session/account/verification) does not depend
- * on which social providers are configured, so leaving `socialProviders`
- * empty here does not change the schema this module generates - it only
- * means no one can actually sign in yet. This avoids needing any Google
- * client id/secret (real or placeholder) in this step at all.
+ * Phase 9D-1C: Google is now wired as the first (and only) social
+ * provider, using Better Auth's default OAuth callback route
+ * (/api/auth/callback/google) - no custom redirectURI is set, since
+ * nothing about this architecture requires deviating from the default.
+ * Sign-in/sign-out UI, worksheet ownership, and claiming are still not
+ * implemented - this only makes the provider available to Better Auth's
+ * own routes.
  *
  * Server-only module: never import this from client code.
  */
@@ -47,5 +48,12 @@ export const auth = betterAuth({
     // table using Better Auth's built-in symmetric encryption (derived
     // from `secret`), rather than storing OAuth tokens in plaintext.
     encryptOAuthTokens: true,
+  },
+
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
   },
 });
