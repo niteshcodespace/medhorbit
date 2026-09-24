@@ -64,7 +64,7 @@ export class PostgresWorksheetRepository implements WorksheetRepository {
   async listByAnonymousId(anonymousId: string): Promise<SavedWorksheet[]> {
     const { rows } = await this.pool.query<WorksheetRow>(
       `SELECT ${COLUMNS} FROM worksheets
-       WHERE anonymous_id = $1
+       WHERE anonymous_id = $1 AND owner_id IS NULL
        ORDER BY saved_at DESC`,
       [anonymousId],
     );
@@ -76,10 +76,35 @@ export class PostgresWorksheetRepository implements WorksheetRepository {
     anonymousId: string,
   ): Promise<SavedWorksheet | null> {
     // Ownership is enforced in the query itself, never checked after fetching.
+    // A claimed worksheet (owner_id IS NOT NULL) is never visible here, even
+    // to the anonymous_id that originally created it.
     const { rows } = await this.pool.query<WorksheetRow>(
       `SELECT ${COLUMNS} FROM worksheets
-       WHERE id = $1 AND anonymous_id = $2`,
+       WHERE id = $1 AND anonymous_id = $2 AND owner_id IS NULL`,
       [id, anonymousId],
+    );
+    return rows.length === 0 ? null : toSavedWorksheet(rows[0]);
+  }
+
+  async listByOwnerId(ownerId: string): Promise<SavedWorksheet[]> {
+    const { rows } = await this.pool.query<WorksheetRow>(
+      `SELECT ${COLUMNS} FROM worksheets
+       WHERE owner_id = $1
+       ORDER BY saved_at DESC`,
+      [ownerId],
+    );
+    return rows.map(toSavedWorksheet);
+  }
+
+  async getByIdForOwner(
+    id: string,
+    ownerId: string,
+  ): Promise<SavedWorksheet | null> {
+    // Ownership is enforced in the query itself, never checked after fetching.
+    const { rows } = await this.pool.query<WorksheetRow>(
+      `SELECT ${COLUMNS} FROM worksheets
+       WHERE id = $1 AND owner_id = $2`,
+      [id, ownerId],
     );
     return rows.length === 0 ? null : toSavedWorksheet(rows[0]);
   }
