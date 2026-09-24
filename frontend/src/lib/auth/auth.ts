@@ -1,5 +1,7 @@
 import { betterAuth } from "better-auth";
 import { getPool } from "@/lib/db/pool";
+import { getWorksheetRepository } from "@/lib/worksheets/repository-instance";
+import { claimWorksheetsOnSessionCreated } from "./worksheet-claim-hook";
 
 /**
  * Phase 9D-1A: Better Auth foundation only.
@@ -19,9 +21,16 @@ import { getPool } from "@/lib/db/pool";
  * provider, using Better Auth's default OAuth callback route
  * (/api/auth/callback/google) - no custom redirectURI is set, since
  * nothing about this architecture requires deviating from the default.
- * Sign-in/sign-out UI, worksheet ownership, and claiming are still not
- * implemented - this only makes the provider available to Better Auth's
- * own routes.
+ * Sign-in/sign-out UI is still not implemented - this only makes the
+ * provider available to Better Auth's own routes.
+ *
+ * Phase 9D-3B: after a session is actually created (post-authentication),
+ * databaseHooks.session.create.after claims any unclaimed worksheets
+ * belonging to the browser's existing anonymous worksheet-session cookie
+ * into the new session's user. See worksheet-claim-hook.ts for the full
+ * security rationale (trusted ownerId/anonymousId sourcing) and failure
+ * policy (never fails authentication). This does not add a public claim
+ * endpoint, change worksheet API auth behavior, or touch save().
  *
  * Server-only module: never import this from client code.
  */
@@ -48,6 +57,15 @@ export const auth = betterAuth({
     // table using Better Auth's built-in symmetric encryption (derived
     // from `secret`), rather than storing OAuth tokens in plaintext.
     encryptOAuthTokens: true,
+  },
+
+  databaseHooks: {
+    session: {
+      create: {
+        after: (session, context) =>
+          claimWorksheetsOnSessionCreated(session, context, getWorksheetRepository()),
+      },
+    },
   },
 
   socialProviders: {

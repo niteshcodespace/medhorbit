@@ -9,8 +9,8 @@ const require = createRequire(import.meta.url);
 const buildDir = process.env.WORKSHEET_TEST_BUILD_DIR;
 if (!buildDir) throw new Error("Run via scripts/test-worksheet-quality.mjs");
 
-const { validateWorksheet } = require(path.join(buildDir, "validator.js"));
-const { isSystemFailure, MAX_GENERATION_ATTEMPTS } = require(path.join(buildDir, "service.js"));
+const { validateWorksheet } = require(path.join(buildDir, "worksheets/validator.js"));
+const { isSystemFailure, MAX_GENERATION_ATTEMPTS } = require(path.join(buildDir, "worksheets/service.js"));
 
 console.error = () => {};
 

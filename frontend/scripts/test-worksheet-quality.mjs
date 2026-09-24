@@ -19,7 +19,9 @@ try {
       "src/lib/worksheets/postgres-repository.ts",
       "src/lib/worksheets/save-validator.ts",
       "src/lib/worksheets/saved-client.ts",
+      "src/lib/auth/worksheet-claim-hook.ts",
       "--outDir", outDir,
+      "--rootDir", "src/lib",
       "--module", "commonjs",
       "--moduleResolution", "node",
       "--target", "es2020",
@@ -41,6 +43,7 @@ try {
         "tests/worksheets/saved-worksheet-detail.test.mjs",
         "tests/worksheets/ownership.test.mjs",
         "tests/worksheets/claim.test.mjs",
+        "tests/worksheets/claim-on-session.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );

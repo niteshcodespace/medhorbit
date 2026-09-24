@@ -11,12 +11,19 @@ export const WORKSHEET_SESSION_COOKIE = "medhorbit_worksheet_session";
 
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 90; // ~90 days
 
+/**
+ * True only for a value shaped like the UUIDs this module issues. The one
+ * validity check for this cookie - shared by every reader so there is a
+ * single anonymous-identity system, not a parallel one per caller.
+ */
+export function isValidAnonymousId(value: string | null | undefined): value is string {
+  return !!value && /^[0-9a-f-]{36}$/i.test(value);
+}
+
 /** Reads the anonymous owner id from the request cookie, if present and well-formed. */
 export function readAnonymousId(request: NextRequest): string | null {
   const value = request.cookies.get(WORKSHEET_SESSION_COOKIE)?.value;
-  if (!value) return null;
-  // Defensive: only ever trust a value shaped like the UUIDs we issue.
-  return /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+  return isValidAnonymousId(value) ? value : null;
 }
 
 /** Sets the anonymous ownership cookie on the response. */

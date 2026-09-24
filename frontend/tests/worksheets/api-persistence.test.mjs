@@ -12,8 +12,8 @@ const require = createRequire(import.meta.url);
 const buildDir = process.env.WORKSHEET_TEST_BUILD_DIR;
 if (!buildDir) throw new Error("Run via scripts/test-worksheet-quality.mjs");
 
-const { validateSaveRequest } = require(path.join(buildDir, "save-validator.js"));
-const { InMemoryWorksheetRepository } = require(path.join(buildDir, "memory-repository.js"));
+const { validateSaveRequest } = require(path.join(buildDir, "worksheets/save-validator.js"));
+const { InMemoryWorksheetRepository } = require(path.join(buildDir, "worksheets/memory-repository.js"));
 
 const makeBody = (overrides = {}) => ({
   classId: "class-5",

@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const buildDir = process.env.WORKSHEET_TEST_BUILD_DIR;
 if (!buildDir) throw new Error("Run via scripts/test-worksheet-quality.mjs");
 
-const { getSavedWorksheet, toWorksheetDomain } = require(path.join(buildDir, "saved-client.js"));
+const { getSavedWorksheet, toWorksheetDomain } = require(path.join(buildDir, "worksheets/saved-client.js"));
 
 const originalFetch = globalThis.fetch;
 function stubFetch(handler) {

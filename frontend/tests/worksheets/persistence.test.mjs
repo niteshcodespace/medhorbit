@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const buildDir = process.env.WORKSHEET_TEST_BUILD_DIR;
 if (!buildDir) throw new Error("Run via scripts/test-worksheet-quality.mjs");
 
-const { InMemoryWorksheetRepository } = require(path.join(buildDir, "memory-repository.js"));
+const { InMemoryWorksheetRepository } = require(path.join(buildDir, "worksheets/memory-repository.js"));
 
 const makeInput = (anonymousId = "anon-a", overrides = {}) => ({
   anonymousId,
