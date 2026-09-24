@@ -108,4 +108,21 @@ export class PostgresWorksheetRepository implements WorksheetRepository {
     );
     return rows.length === 0 ? null : toSavedWorksheet(rows[0]);
   }
+
+  async claimAnonymousWorksheets(
+    anonymousId: string,
+    ownerId: string,
+  ): Promise<number> {
+    // One atomic UPDATE: the owner_id IS NULL predicate is checked and
+    // applied by Postgres in the same statement, so there is no
+    // read-then-update race and no per-row loop. Rows already owned by
+    // anyone never match, so this is safe to call repeatedly.
+    const result = await this.pool.query(
+      `UPDATE worksheets
+       SET owner_id = $2
+       WHERE anonymous_id = $1 AND owner_id IS NULL`,
+      [anonymousId, ownerId],
+    );
+    return result.rowCount ?? 0;
+  }
 }

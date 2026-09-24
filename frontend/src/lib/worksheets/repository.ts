@@ -38,4 +38,13 @@ export interface WorksheetRepository {
   listByOwnerId(ownerId: string): Promise<SavedWorksheet[]>;
   /** Returns null when the id is unknown or owned by a different user. */
   getByIdForOwner(id: string, ownerId: string): Promise<SavedWorksheet | null>;
+  /**
+   * Claims every currently-unclaimed worksheet for the given anonymous id
+   * into the given (Better Auth) owner id, in one atomic operation - no
+   * read-then-update race. Rows already owned by anyone (including this
+   * same owner) are left untouched, which makes repeated calls idempotent:
+   * the first call claims them, every later call claims nothing.
+   * Returns the number of worksheets actually claimed.
+   */
+  claimAnonymousWorksheets(anonymousId: string, ownerId: string): Promise<number>;
 }

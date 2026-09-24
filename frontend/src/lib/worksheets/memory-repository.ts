@@ -80,4 +80,18 @@ export class InMemoryWorksheetRepository implements WorksheetRepository {
     const row = this.rows.find((r) => r.worksheet.id === id && r.ownerId === ownerId);
     return row ? snapshot(row.worksheet) : null;
   }
+
+  async claimAnonymousWorksheets(
+    anonymousId: string,
+    ownerId: string,
+  ): Promise<number> {
+    let claimed = 0;
+    for (const row of this.rows) {
+      if (row.worksheet.anonymousId === anonymousId && row.ownerId === null) {
+        row.ownerId = ownerId;
+        claimed += 1;
+      }
+    }
+    return claimed;
+  }
 }
