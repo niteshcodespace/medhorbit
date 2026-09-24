@@ -19,6 +19,7 @@ try {
       "src/lib/worksheets/postgres-repository.ts",
       "src/lib/worksheets/save-validator.ts",
       "src/lib/worksheets/saved-client.ts",
+      "src/lib/worksheets/scoped-access.ts",
       "src/lib/auth/worksheet-claim-hook.ts",
       "--outDir", outDir,
       "--rootDir", "src/lib",
@@ -45,6 +46,7 @@ try {
         "tests/worksheets/claim.test.mjs",
         "tests/worksheets/claim-on-session.test.mjs",
         "tests/worksheets/authenticated-save.test.mjs",
+        "tests/worksheets/api-auth-scope.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
