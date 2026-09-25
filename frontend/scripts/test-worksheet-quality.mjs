@@ -28,6 +28,7 @@ try {
       "src/lib/practice/dto.ts",
       "src/lib/practice/question-support.ts",
       "src/lib/practice/service.ts",
+      "src/lib/practice/client.ts",
       "--outDir", outDir,
       "--rootDir", "src/lib",
       "--module", "commonjs",
@@ -57,6 +58,8 @@ try {
         "tests/auth/auth-ui.test.mjs",
         "tests/practice/practice-repository.test.mjs",
         "tests/practice/practice-api.test.mjs",
+        "tests/practice/practice-client.test.mjs",
+        "tests/practice/practice-ui.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );

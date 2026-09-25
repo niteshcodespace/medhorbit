@@ -1,0 +1,204 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import Button from "@/components/ui/Button";
+import Card from "@/components/ui/Card";
+import { COLORS, TYPOGRAPHY } from "@/constants";
+import { curriculum } from "@/lib/worksheets/mock-data";
+import { getPracticeAttempt, type PracticeAttemptDetail } from "@/lib/practice/client";
+
+type SessionState =
+  | { status: "loading" }
+  | { status: "unauthorized" }
+  | { status: "not_found" }
+  | { status: "error"; message: string }
+  | { status: "ready"; detail: PracticeAttemptDetail };
+
+const helpClassName = `mt-2 ${TYPOGRAPHY.small} ${COLORS.text.secondary}`;
+
+function labelsFor(worksheet: PracticeAttemptDetail["worksheet"]) {
+  const selectedClass = curriculum.find((item) => item.id === worksheet.classId);
+  const subject = selectedClass?.subjects.find((item) => item.id === worksheet.subjectId);
+  const topic = subject?.topics.find((item) => item.id === worksheet.topicId);
+  return {
+    classLabel: selectedClass?.label ?? worksheet.classId,
+    subjectLabel: subject?.label ?? worksheet.subjectId,
+    topicLabel: topic?.label ?? worksheet.topicId,
+  };
+}
+
+/** Seeds local answer state from any answers the server already has on record (Phase 10C's GET may return them) - this reads existing state, it does not create any new persistence. */
+function initialAnswers(detail: PracticeAttemptDetail): Record<string, string> {
+  const answers: Record<string, string> = {};
+  for (const saved of detail.answers) {
+    answers[saved.questionId] = saved.answer;
+  }
+  return answers;
+}
+
+/**
+ * The practice-taking experience: one question at a time, answered
+ * entirely in local React state (Phase 10D scope - no persistence, no
+ * submission, no scoring). Fetches ONLY GET /api/practice-attempts/[id],
+ * the answer-safe endpoint - never GET /api/worksheets/[id], which
+ * includes correct answers and is not safe to use here. This is a hard
+ * security rule for this component.
+ */
+export default function PracticeSession({ attemptId }: { attemptId: string }) {
+  const [state, setState] = useState<SessionState>({ status: "loading" });
+  const [index, setIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getPracticeAttempt(attemptId).then((result) => {
+      if (cancelled) return;
+      if (result.status === "found") {
+        setState({ status: "ready", detail: result.detail });
+        setAnswers(initialAnswers(result.detail));
+      } else if (result.status === "unauthorized") {
+        setState({ status: "unauthorized" });
+      } else if (result.status === "not_found") {
+        setState({ status: "not_found" });
+      } else {
+        setState({ status: "error", message: result.message });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attemptId]);
+
+  if (state.status === "loading") {
+    return (
+      <p role="status" className={helpClassName}>
+        Loading practice...
+      </p>
+    );
+  }
+
+  if (state.status === "unauthorized") {
+    return (
+      <div>
+        <p role="alert" className="text-red-300">
+          Sign in to view this practice attempt.
+        </p>
+        <Link href="/worksheets/saved" className="mt-4 inline-block">
+          <Button type="button" className="mt-4">Back to My Worksheets</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (state.status === "not_found") {
+    return (
+      <div>
+        <p role="alert" className="text-red-300">
+          This practice attempt is not available.
+        </p>
+        <Link href="/worksheets/saved" className="mt-4 inline-block">
+          <Button type="button" className="mt-4">Back to My Worksheets</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div>
+        <p role="alert" className="text-red-300">
+          {state.message}
+        </p>
+        <Link href="/worksheets/saved" className="mt-4 inline-block">
+          <Button type="button" className="mt-4">Back to My Worksheets</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const { detail } = state;
+  const { subjectLabel, topicLabel } = labelsFor(detail.worksheet);
+  const questions = detail.questions;
+  const total = questions.length;
+  const currentQuestion = questions[index];
+  const isFirst = index === 0;
+  const isLast = index === total - 1;
+  const progressPercent = total > 0 ? Math.round(((index + 1) / total) * 100) : 0;
+  const inputId = `practice-answer-${currentQuestion.id}`;
+
+  function updateAnswer(value: string) {
+    setAnswers((previous) => ({ ...previous, [currentQuestion.id]: value }));
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className={`${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
+        {subjectLabel} • {topicLabel}
+      </p>
+
+      <div>
+        <p className={`${TYPOGRAPHY.small} ${COLORS.text.secondary}`}>
+          Question {index + 1} of {total}
+        </p>
+        <div
+          role="progressbar"
+          aria-valuenow={index + 1}
+          aria-valuemin={1}
+          aria-valuemax={total}
+          aria-label={`Question ${index + 1} of ${total}`}
+          className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10"
+        >
+          <div
+            className={`h-full rounded-full ${COLORS.primary}`}
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+
+      <Card>
+        <p className={`${TYPOGRAPHY.body}`}>{currentQuestion.prompt}</p>
+
+        <div className="mt-6">
+          <label htmlFor={inputId} className={`block ${TYPOGRAPHY.small} ${COLORS.text.secondary}`}>
+            Your answer
+          </label>
+          <input
+            id={inputId}
+            type="text"
+            value={answers[currentQuestion.id] ?? ""}
+            onChange={(event) => updateAnswer(event.target.value)}
+            className="mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 px-3 py-2 text-white"
+            autoComplete="off"
+          />
+        </div>
+      </Card>
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIndex((current) => Math.max(0, current - 1))}
+          disabled={isFirst}
+        >
+          Previous
+        </Button>
+
+        {isLast ? (
+          <p className={`${TYPOGRAPHY.small} ${COLORS.text.secondary}`} role="status">
+            This is the last question.
+          </p>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => setIndex((current) => Math.min(total - 1, current + 1))}
+          >
+            Next
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}

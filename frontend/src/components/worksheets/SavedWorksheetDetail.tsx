@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
+import PracticeOnlineButton from "@/components/practice/PracticeOnlineButton";
 import PrintButton from "./PrintButton";
 import WorksheetPreview from "./WorksheetPreview";
 import { COLORS, TYPOGRAPHY } from "@/constants";
@@ -95,7 +96,10 @@ export default function SavedWorksheetDetail({ id }: { id: string }) {
         <BackLink />
         <p className={helpClassName}>Saved {formatSavedAt(state.savedAt)}</p>
       </div>
-      <PrintButton />
+      <div className="worksheet-screen-only flex flex-wrap items-center gap-4">
+        <PrintButton />
+        <PracticeOnlineButton worksheetId={id} />
+      </div>
       <WorksheetPreview worksheet={state.worksheet} headingRef={previewHeading} />
     </div>
   );
