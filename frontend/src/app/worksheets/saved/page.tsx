@@ -30,7 +30,7 @@ export default function SavedWorksheetsPage() {
                 My Worksheets
               </h1>
               <p className={`mt-4 mb-4 ${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
-                Worksheets you have saved on this device.
+                Your saved worksheets.
               </p>
               <Link href="/worksheets" className="mb-8 inline-block">
                 <span className={`${TYPOGRAPHY.small} underline ${COLORS.text.secondary} hover:text-white`}>

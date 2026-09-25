@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AuthStatus from "@/components/layout/AuthStatus";
 import Container from "@/components/common/Container";
 import { COLORS, NAV_ITEMS } from "@/constants";
 
@@ -12,15 +13,18 @@ export default function Navbar() {
           <span aria-hidden="true">🚀</span> MedhOrbit
         </Link>
 
-        <ul className="hidden items-center gap-4 md:flex">
-          {NAV_ITEMS.map((item) => (
-            <li key={item.href}>
-              <Link href={item.href} className={linkClassName}>
-                {item.title}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="hidden items-center gap-4 md:flex">
+          <ul className="flex items-center gap-4">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className={linkClassName}>
+                  {item.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <AuthStatus />
+        </div>
 
         <details className="w-full pb-4 md:hidden">
           <summary className="min-h-11 cursor-pointer rounded-md px-2 py-3 font-semibold">
@@ -35,6 +39,9 @@ export default function Navbar() {
               </li>
             ))}
           </ul>
+          <div className="mt-2 px-2">
+            <AuthStatus />
+          </div>
         </details>
       </Container>
     </nav>

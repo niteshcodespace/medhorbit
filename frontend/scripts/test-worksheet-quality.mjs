@@ -1,5 +1,6 @@
-// Compiles the worksheet modules to a temp dir with the project's own TypeScript
-// and runs the zero-cost quality regression and persistence tests. Makes no network or API calls.
+// Compiles the worksheet and auth modules to a temp dir with the project's own
+// TypeScript and runs the zero-cost quality regression and persistence tests.
+// Makes no network or API calls.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -21,6 +22,7 @@ try {
       "src/lib/worksheets/saved-client.ts",
       "src/lib/worksheets/scoped-access.ts",
       "src/lib/auth/worksheet-claim-hook.ts",
+      "src/lib/auth/display-name.ts",
       "--outDir", outDir,
       "--rootDir", "src/lib",
       "--module", "commonjs",
@@ -47,6 +49,7 @@ try {
         "tests/worksheets/claim-on-session.test.mjs",
         "tests/worksheets/authenticated-save.test.mjs",
         "tests/worksheets/api-auth-scope.test.mjs",
+        "tests/auth/auth-ui.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
