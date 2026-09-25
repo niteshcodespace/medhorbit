@@ -25,6 +25,9 @@ try {
       "src/lib/auth/display-name.ts",
       "src/lib/practice/memory-repository.ts",
       "src/lib/practice/postgres-repository.ts",
+      "src/lib/practice/dto.ts",
+      "src/lib/practice/question-support.ts",
+      "src/lib/practice/service.ts",
       "--outDir", outDir,
       "--rootDir", "src/lib",
       "--module", "commonjs",
@@ -53,6 +56,7 @@ try {
         "tests/worksheets/api-auth-scope.test.mjs",
         "tests/auth/auth-ui.test.mjs",
         "tests/practice/practice-repository.test.mjs",
+        "tests/practice/practice-api.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
