@@ -321,7 +321,7 @@ test("21. the pre-submission attempt DTO does not expose isCorrect anywhere", ()
   assert.ok(!("ownerId" in dto));
 });
 
-test("22. the pre-submission attempt DTO does not expose correctCount", () => {
+test("22. the pre-submission attempt DTO exposes correctCount only as null (Phase 10F: present but never populated before submission)", () => {
   const attempt = {
     id: "a1",
     worksheetId: "w1",
@@ -335,10 +335,10 @@ test("22. the pre-submission attempt DTO does not expose correctCount", () => {
     submittedAt: null,
   };
   const dto = toPracticeAttemptDTO(attempt);
-  assert.ok(!("correctCount" in dto));
+  assert.equal(dto.correctCount, null);
 });
 
-test("23. the pre-submission attempt DTO does not expose scorePercent", () => {
+test("23. the pre-submission attempt DTO exposes scorePercent only as null (Phase 10F: present but never populated before submission)", () => {
   const attempt = {
     id: "a1",
     worksheetId: "w1",
@@ -352,10 +352,20 @@ test("23. the pre-submission attempt DTO does not expose scorePercent", () => {
     submittedAt: null,
   };
   const dto = toPracticeAttemptDTO(attempt);
-  assert.ok(!("scorePercent" in dto));
+  assert.equal(dto.scorePercent, null);
   assert.deepEqual(
     Object.keys(dto).sort(),
-    ["id", "questionCount", "startedAt", "status", "submittedAt", "updatedAt", "worksheetId"],
+    [
+      "correctCount",
+      "id",
+      "questionCount",
+      "scorePercent",
+      "startedAt",
+      "status",
+      "submittedAt",
+      "updatedAt",
+      "worksheetId",
+    ],
   );
 });
 

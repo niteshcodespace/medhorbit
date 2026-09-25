@@ -86,19 +86,17 @@ test("13/14. Next moves the index forward and Previous moves it backward", () =>
   assert.match(practiceSessionSource, /setIndex\(\(current\) => Math\.max\(0, current - 1\)\)/);
 });
 
-test("15. Previous is disabled on the first question", () => {
+test("15. Previous is disabled on the first question (also while a save/submit is pending)", () => {
   assert.match(practiceSessionSource, /const isFirst = index === 0;/);
-  assert.match(practiceSessionSource, /disabled=\{isFirst \|\| saveState\.status === "saving"\}/);
+  assert.match(
+    practiceSessionSource,
+    /disabled=\{isFirst \|\| saveState\.status === "saving" \|\| submitState\.status === "submitting"\}/,
+  );
 });
 
-test("17. the final question shows a clear indicator instead of a Submit/scoring control", () => {
+test("17 (superseded by Phase 10F test 41 below): the final question now shows Submit Practice, not the old static last-question text", () => {
   assert.match(practiceSessionSource, /const isLast = index === total - 1;/);
-  assert.match(practiceSessionSource, /This is the last question\./);
-  // Case-sensitive and word-bounded: a UI control would read "Submit" (a
-  // capitalized button label), which must not exist. This intentionally
-  // does not flag prose like "...already been submitted." (Phase 10E's
-  // lowercase, past-tense description of a future immutability state).
-  assert.doesNotMatch(practiceSessionSource, /\bSubmit\b/);
+  assert.match(practiceSessionSource, /Submit Practice/);
 });
 
 // --- local answer state ---
@@ -116,16 +114,14 @@ test("21. local answer state can be seeded from existing server-known answers", 
   assert.match(practiceSessionSource, /setAnswers\(initialAnswers\(result\.detail\)\)/);
 });
 
-// --- 18/19/20. no answer key / score / correctness anywhere in the rendering component ---
+// --- 18/19. no per-question answer key / correctness anywhere in the rendering component ---
+// (Phase 10F legitimately introduces correctCount/scorePercent in the
+// post-submission summary - see tests 45/46/47 below - so those two are
+// no longer forbidden. What must still never appear is the worksheet's
+// own correct-answer text/key or any per-question correctness signal.)
 
-test("18/19/20. the practice session component never references answer-key/score/correctness vocabulary", () => {
-  for (const forbidden of [
-    /\bcorrectAnswer\b/i,
-    /\bisCorrect\b/i,
-    /\bscorePercent\b/i,
-    /\bcorrectCount\b/i,
-    /[Aa]nswer\s*[Kk]ey/,
-  ]) {
+test("18/19. the practice session component never references the worksheet answer key or per-question correctness", () => {
+  for (const forbidden of [/\bcorrectAnswer\b/i, /\bisCorrect\b/i, /[Aa]nswer\s*[Kk]ey/]) {
     assert.doesNotMatch(practiceSessionSource, forbidden);
   }
 });
@@ -169,9 +165,15 @@ test("24. Previous navigation saves the current answer before moving backward", 
   assert.match(practiceSessionSource, /onClick=\{handlePrevious\}/);
 });
 
-test("25. both navigation buttons are disabled while a save is pending", () => {
-  assert.match(practiceSessionSource, /disabled=\{isFirst \|\| saveState\.status === "saving"\}/);
-  assert.match(practiceSessionSource, /disabled=\{saveState\.status === "saving"\}/);
+test("25. both navigation buttons are disabled while a save or submit is pending", () => {
+  assert.match(
+    practiceSessionSource,
+    /disabled=\{isFirst \|\| saveState\.status === "saving" \|\| submitState\.status === "submitting"\}/,
+  );
+  assert.match(
+    practiceSessionSource,
+    /disabled=\{saveState\.status === "saving" \|\| submitState\.status === "submitting"\}/,
+  );
 });
 
 test("26/27. a failed save reports an error and does not clear the local answer or the failed request re-throwing", () => {
@@ -197,8 +199,62 @@ test("30. the practice session component still never imports the normal workshee
   assert.doesNotMatch(practiceSessionSource, /lib\/worksheets\/saved-client/);
 });
 
-test("29. no grading/scoring/submission vocabulary was introduced in the practice session UI", () => {
-  for (const forbidden of [/\bsubmitAttempt\b/i, /\bgradeAnswer\b/i, /\bnormalize\b/i]) {
+// Phase 10E's version of this test forbade all submission vocabulary,
+// which Phase 10F correctly and deliberately introduces (Submit
+// Practice). What must still hold is narrower: no per-question
+// correct-answer/answer-key vocabulary, and no client-side grading
+// logic (grading is entirely server-side, per lib/practice/grading.ts).
+test("no answer-key/client-side-grading vocabulary was introduced in the practice session UI", () => {
+  for (const forbidden of [/\bcorrectAnswer\b/i, /\banswerKey\b/i, /\bgradeAttempt\b/i, /\bnormalizePracticeAnswer\b/i]) {
     assert.doesNotMatch(practiceSessionSource, forbidden);
   }
+});
+
+// --- Phase 10F: submit/completion behavior ---
+
+test("41. the final question shows a Submit Practice control instead of the old last-question text", () => {
+  assert.match(practiceSessionSource, /Submit Practice/);
+  assert.doesNotMatch(practiceSessionSource, /This is the last question\./);
+});
+
+test("42. submission saves the current answer first, via the same saveCurrentAnswer used by navigation", () => {
+  assert.match(practiceSessionSource, /async function handleSubmit\(\)/);
+  assert.match(practiceSessionSource, /const saved = await saveCurrentAnswer\(\);\s*\n\s*if \(!saved\) return;/);
+});
+
+test("43. a failed current-answer save blocks submission (handleSubmit returns before calling submit)", () => {
+  assert.match(practiceSessionSource, /if \(!saved\) return;\s*\n\s*\n\s*setSubmitState\(\{ status: "submitting" \}\);/);
+});
+
+test("44. double-submit is prevented: Submit is disabled while a save or submit is already in flight", () => {
+  assert.match(
+    practiceSessionSource,
+    /if \(saveState\.status === "saving" \|\| submitState\.status === "submitting"\) return;/,
+  );
+  assert.match(
+    practiceSessionSource,
+    /disabled=\{saveState\.status === "saving" \|\| submitState\.status === "submitting"\}/,
+  );
+});
+
+test("45/46/47. a successful submission shows a Practice Complete summary with correct count and score", () => {
+  assert.match(practiceSessionSource, /Practice Complete/);
+  assert.match(practiceSessionSource, /Score: \{detail\.attempt\.correctCount/);
+  assert.match(practiceSessionSource, /detail\.attempt\.questionCount/);
+  assert.match(practiceSessionSource, /detail\.attempt\.scorePercent/);
+});
+
+test("48/49. a submitted attempt (fresh submit or a resumed/refreshed GET) renders a non-editable completion state, not the question form", () => {
+  assert.match(practiceSessionSource, /if \(detail\.attempt\.status === "submitted"\)/);
+  // The submitted branch returns before the editable-question JSX below it,
+  // so no <input> exists in that returned tree.
+  assert.match(
+    practiceSessionSource,
+    /if \(detail\.attempt\.status === "submitted"\) \{\s*\n\s*return \(/,
+  );
+});
+
+test("50. no detailed per-question answer-review UI exists yet (no per-question correctness list)", () => {
+  assert.doesNotMatch(practiceSessionSource, /isCorrect/);
+  assert.doesNotMatch(practiceSessionSource, /Review/i);
 });

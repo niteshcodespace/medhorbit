@@ -38,6 +38,8 @@ export type PracticeAttemptDTO = {
   worksheetId: string;
   status: PracticeAttemptStatus;
   questionCount: number;
+  correctCount: number | null;
+  scorePercent: number | null;
   startedAt: string;
   updatedAt: string;
   submittedAt: string | null;
@@ -46,8 +48,15 @@ export type PracticeAttemptDTO = {
 /**
  * Maps a persisted attempt to its API shape. Deliberately omits
  * `ownerId` (never exposed to the client - see the worksheet APIs'
- * identical rule), `correctCount`, and `scorePercent` (both always null
- * before submission, and submission does not exist yet in this phase).
+ * identical rule). `correctCount`/`scorePercent` ARE included as of
+ * Phase 10F, but this leaks nothing early: the domain guarantees both
+ * are `null` for any `in_progress` attempt (nothing writes them before
+ * `submitAttempt`), so a pre-submission response still shows `null` for
+ * both - only a genuinely submitted attempt ever has real values here.
+ * Per-question `isCorrect` and the worksheet's correct answers remain
+ * hidden everywhere (see toPracticeAnswerDTO/toPracticeQuestionDTO) -
+ * that stays true regardless of submission status, by design, until a
+ * future answer-review story (Phase 10G).
  */
 export function toPracticeAttemptDTO(attempt: PracticeAttempt): PracticeAttemptDTO {
   return {
@@ -55,6 +64,8 @@ export function toPracticeAttemptDTO(attempt: PracticeAttempt): PracticeAttemptD
     worksheetId: attempt.worksheetId,
     status: attempt.status,
     questionCount: attempt.questionCount,
+    correctCount: attempt.correctCount,
+    scorePercent: attempt.scorePercent,
     startedAt: attempt.startedAt.toISOString(),
     updatedAt: attempt.updatedAt.toISOString(),
     submittedAt: attempt.submittedAt ? attempt.submittedAt.toISOString() : null,

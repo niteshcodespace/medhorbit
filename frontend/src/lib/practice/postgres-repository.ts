@@ -7,6 +7,7 @@ import type {
   PracticeAttemptStatus,
   UpsertPracticeAnswerInput,
 } from "./types";
+import type { QuestionGrade } from "./grading";
 
 type AttemptRow = {
   id: string;
@@ -158,5 +159,62 @@ export class PostgresPracticeRepository implements PracticeRepository {
       [attemptId, ownerId],
     );
     return rows.map(toPracticeAnswer);
+  }
+
+  async submitAttempt(
+    attemptId: string,
+    ownerId: string,
+    grades: readonly QuestionGrade[],
+    correctCount: number,
+    scorePercent: number,
+  ): Promise<PracticeAttempt | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // The status = 'in_progress' predicate is what makes this
+      // race-safe: Postgres row-level locking means a concurrent submit
+      // for the same attempt blocks here until this transaction commits
+      // or rolls back, then re-evaluates the predicate against the
+      // now-committed row - so at most one submit can ever match and
+      // update 0 rows for every submit after the first.
+      const attemptResult = await client.query<AttemptRow>(
+        `UPDATE practice_attempts
+         SET status = 'submitted',
+             correct_count = $3,
+             score_percent = $4,
+             submitted_at = now(),
+             updated_at = now()
+         WHERE id = $1 AND owner_id = $2 AND status = 'in_progress'
+         RETURNING ${ATTEMPT_COLUMNS}`,
+        [attemptId, ownerId, correctCount, scorePercent.toFixed(2)],
+      );
+
+      if (attemptResult.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+
+      // Only questions with a recorded answer have a row to grade -
+      // unanswered questions have no practice_answers row and are not
+      // touched here (they were already counted as incorrect by the
+      // caller's correctCount).
+      for (const grade of grades) {
+        await client.query(
+          `UPDATE practice_answers
+           SET is_correct = $3
+           WHERE attempt_id = $1 AND question_id = $2`,
+          [attemptId, grade.questionId, grade.isCorrect],
+        );
+      }
+
+      await client.query("COMMIT");
+      return toPracticeAttempt(attemptResult.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

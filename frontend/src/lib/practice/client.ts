@@ -85,6 +85,8 @@ export type PracticeAttemptSummary = {
   worksheetId: string;
   status: string;
   questionCount: number;
+  correctCount: number | null;
+  scorePercent: number | null;
   startedAt: string;
   updatedAt: string;
   submittedAt: string | null;
@@ -128,13 +130,15 @@ function toDetail(value: unknown): PracticeAttemptDetail | null {
   const { attempt, worksheet, questions, answers } = value as Record<string, unknown>;
 
   if (typeof attempt !== "object" || attempt === null) return null;
-  const { id, worksheetId, status, questionCount, startedAt, updatedAt, submittedAt } =
+  const { id, worksheetId, status, questionCount, correctCount, scorePercent, startedAt, updatedAt, submittedAt } =
     attempt as Record<string, unknown>;
   if (
     !isNonEmptyString(id) ||
     !isNonEmptyString(worksheetId) ||
     !isNonEmptyString(status) ||
     typeof questionCount !== "number" ||
+    !(correctCount === null || typeof correctCount === "number") ||
+    !(scorePercent === null || typeof scorePercent === "number") ||
     !isNonEmptyString(startedAt) ||
     !isNonEmptyString(updatedAt) ||
     !(submittedAt === null || isNonEmptyString(submittedAt))
@@ -175,6 +179,8 @@ function toDetail(value: unknown): PracticeAttemptDetail | null {
       worksheetId,
       status,
       questionCount,
+      correctCount: correctCount as number | null,
+      scorePercent: scorePercent as number | null,
       startedAt,
       updatedAt,
       submittedAt: submittedAt as string | null,
@@ -269,4 +275,83 @@ export async function savePracticeAnswer(
   if (!response.ok) return { status: "error", message: SAVE_ANSWER_GENERIC_ERROR };
 
   return { status: "saved" };
+}
+
+// --- submit practice attempt ----------------------------------------------
+
+export type SubmitPracticeAttemptResult =
+  | { status: "submitted"; attempt: PracticeAttemptSummary }
+  | { status: "unauthorized" }
+  | { status: "not_found" }
+  | { status: "already_submitted" }
+  | { status: "error"; message: string };
+
+const SUBMIT_GENERIC_ERROR = "Could not submit this practice attempt. Please try again.";
+
+function toAttemptSummary(value: unknown): PracticeAttemptSummary | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { id, worksheetId, status, questionCount, correctCount, scorePercent, startedAt, updatedAt, submittedAt } =
+    value as Record<string, unknown>;
+  if (
+    !isNonEmptyString(id) ||
+    !isNonEmptyString(worksheetId) ||
+    !isNonEmptyString(status) ||
+    typeof questionCount !== "number" ||
+    !(correctCount === null || typeof correctCount === "number") ||
+    !(scorePercent === null || typeof scorePercent === "number") ||
+    !isNonEmptyString(startedAt) ||
+    !isNonEmptyString(updatedAt) ||
+    !(submittedAt === null || isNonEmptyString(submittedAt))
+  ) {
+    return null;
+  }
+  return {
+    id,
+    worksheetId,
+    status,
+    questionCount,
+    correctCount: correctCount as number | null,
+    scorePercent: scorePercent as number | null,
+    startedAt,
+    updatedAt,
+    submittedAt: submittedAt as string | null,
+  };
+}
+
+/**
+ * POST /api/practice-attempts/{attemptId}/submit with no body - grading
+ * is entirely server-side; there is nothing for this client to send.
+ */
+export async function submitPracticeAttempt(
+  attemptId: string,
+): Promise<SubmitPracticeAttemptResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/practice-attempts/${encodeURIComponent(attemptId)}/submit`, {
+      method: "POST",
+    });
+  } catch {
+    return { status: "error", message: SUBMIT_GENERIC_ERROR };
+  }
+
+  if (response.status === 401) return { status: "unauthorized" };
+  if (response.status === 404) return { status: "not_found" };
+  if (response.status === 409) return { status: "already_submitted" };
+  if (!response.ok) return { status: "error", message: SUBMIT_GENERIC_ERROR };
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { status: "error", message: SUBMIT_GENERIC_ERROR };
+  }
+
+  if (typeof body !== "object" || body === null) {
+    return { status: "error", message: SUBMIT_GENERIC_ERROR };
+  }
+  const { data } = body as Record<string, unknown>;
+  const attempt = toAttemptSummary(data);
+  if (!attempt) return { status: "error", message: SUBMIT_GENERIC_ERROR };
+
+  return { status: "submitted", attempt };
 }

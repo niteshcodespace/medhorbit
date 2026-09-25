@@ -6,7 +6,12 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { COLORS, TYPOGRAPHY } from "@/constants";
 import { curriculum } from "@/lib/worksheets/mock-data";
-import { getPracticeAttempt, savePracticeAnswer, type PracticeAttemptDetail } from "@/lib/practice/client";
+import {
+  getPracticeAttempt,
+  savePracticeAnswer,
+  submitPracticeAttempt,
+  type PracticeAttemptDetail,
+} from "@/lib/practice/client";
 
 type SessionState =
   | { status: "loading" }
@@ -17,11 +22,18 @@ type SessionState =
 
 type SaveState = { status: "idle" } | { status: "saving" } | { status: "error"; message: string };
 
+type SubmitState = { status: "idle" } | { status: "submitting" } | { status: "error"; message: string };
+
 const UNAUTHORIZED_SAVE_MESSAGE = "Sign in to save your answer.";
 const NOT_FOUND_SAVE_MESSAGE = "This practice attempt is no longer available.";
 const NOT_WRITABLE_SAVE_MESSAGE = "This practice attempt has already been submitted.";
 const INVALID_QUESTION_SAVE_MESSAGE = "This question could not be saved.";
 const GENERIC_SAVE_MESSAGE = "Could not save your answer. Please try again.";
+
+const SUBMIT_UNAUTHORIZED_MESSAGE = "Sign in to submit this practice attempt.";
+const SUBMIT_NOT_FOUND_MESSAGE = "This practice attempt is no longer available.";
+const SUBMIT_ALREADY_SUBMITTED_MESSAGE = "This practice attempt has already been submitted.";
+const SUBMIT_GENERIC_MESSAGE = "Could not submit this practice attempt. Please try again.";
 
 const helpClassName = `mt-2 ${TYPOGRAPHY.small} ${COLORS.text.secondary}`;
 
@@ -58,6 +70,7 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
+  const [submitState, setSubmitState] = useState<SubmitState>({ status: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +201,71 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
     if (saved) setIndex((current) => Math.min(total - 1, current + 1));
   }
 
+  /**
+   * Submits the attempt. Saves the current question's answer first -
+   * exactly like Previous/Next - and never submits if that save fails,
+   * so a failed save always leaves the learner able to retry with their
+   * answer intact rather than losing it to a submission that then also
+   * fails or grades stale data.
+   */
+  async function handleSubmit() {
+    if (saveState.status === "saving" || submitState.status === "submitting") return;
+
+    const saved = await saveCurrentAnswer();
+    if (!saved) return;
+
+    setSubmitState({ status: "submitting" });
+    const result = await submitPracticeAttempt(attemptId);
+
+    if (result.status === "submitted") {
+      setSubmitState({ status: "idle" });
+      // Reflect the now-submitted attempt locally rather than re-fetching -
+      // the server already returned the authoritative summary.
+      setState((previous) =>
+        previous.status === "ready"
+          ? { status: "ready", detail: { ...previous.detail, attempt: result.attempt } }
+          : previous,
+      );
+      return;
+    }
+
+    const message =
+      result.status === "unauthorized"
+        ? SUBMIT_UNAUTHORIZED_MESSAGE
+        : result.status === "not_found"
+          ? SUBMIT_NOT_FOUND_MESSAGE
+          : result.status === "already_submitted"
+            ? SUBMIT_ALREADY_SUBMITTED_MESSAGE
+            : result.message || SUBMIT_GENERIC_MESSAGE;
+    setSubmitState({ status: "error", message });
+  }
+
+  // A submitted attempt is a hard, non-editable end state: no question
+  // navigation, no answer input, and no answer-saving/submission API is
+  // ever called from this branch - refreshing a submitted attempt lands
+  // here directly, since GET already returns the submitted summary.
+  if (detail.attempt.status === "submitted") {
+    return (
+      <div className="space-y-6">
+        <p className={`${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
+          {subjectLabel} • {topicLabel}
+        </p>
+        <Card>
+          <h2 className={TYPOGRAPHY.sectionTitle}>Practice Complete</h2>
+          <p className={`mt-4 ${TYPOGRAPHY.body}`}>
+            Score: {detail.attempt.correctCount ?? 0} / {detail.attempt.questionCount}
+          </p>
+          <p className={`${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
+            {detail.attempt.scorePercent ?? 0}%
+          </p>
+        </Card>
+        <Link href="/worksheets/saved" className="inline-block">
+          <Button type="button">Back to My Worksheets</Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <p className={`${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
@@ -233,6 +311,11 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
               {saveState.message}
             </p>
           )}
+          {submitState.status === "error" && (
+            <p role="alert" className="mt-2 text-sm text-red-300">
+              {submitState.message}
+            </p>
+          )}
         </div>
       </Card>
 
@@ -241,17 +324,25 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
           type="button"
           variant="outline"
           onClick={handlePrevious}
-          disabled={isFirst || saveState.status === "saving"}
+          disabled={isFirst || saveState.status === "saving" || submitState.status === "submitting"}
         >
           Previous
         </Button>
 
         {isLast ? (
-          <p className={`${TYPOGRAPHY.small} ${COLORS.text.secondary}`} role="status">
-            This is the last question.
-          </p>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saveState.status === "saving" || submitState.status === "submitting"}
+          >
+            {submitState.status === "submitting" ? "Submitting..." : "Submit Practice"}
+          </Button>
         ) : (
-          <Button type="button" onClick={handleNext} disabled={saveState.status === "saving"}>
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={saveState.status === "saving" || submitState.status === "submitting"}
+          >
             {saveState.status === "saving" ? "Saving..." : "Next"}
           </Button>
         )}

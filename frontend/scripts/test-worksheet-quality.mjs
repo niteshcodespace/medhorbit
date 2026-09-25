@@ -30,6 +30,7 @@ try {
       "src/lib/practice/service.ts",
       "src/lib/practice/client.ts",
       "src/lib/practice/answer-validator.ts",
+      "src/lib/practice/grading.ts",
       "--outDir", outDir,
       "--rootDir", "src/lib",
       "--module", "commonjs",
@@ -63,6 +64,9 @@ try {
         "tests/practice/practice-ui.test.mjs",
         "tests/practice/practice-answers.test.mjs",
         "tests/practice/practice-answer-client.test.mjs",
+        "tests/practice/practice-grading.test.mjs",
+        "tests/practice/practice-submit.test.mjs",
+        "tests/practice/practice-submit-client.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );

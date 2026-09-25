@@ -2,6 +2,7 @@ import type { SavedWorksheet, WorksheetRepository } from "../worksheets/reposito
 import type { PracticeRepository } from "./repository";
 import type { PracticeAnswer, PracticeAttempt } from "./types";
 import { worksheetIsPracticable } from "./question-support";
+import { gradeAttempt } from "./grading";
 
 /** Only an in_progress attempt accepts answer writes. Once submission
  * exists (a later story), a submitted attempt becomes immutable; this
@@ -161,4 +162,64 @@ export async function savePracticeAnswer(
   if (!saved) return { kind: "not_found" };
 
   return { kind: "saved", answer: saved };
+}
+
+export type SubmitPracticeAttemptResult =
+  | { kind: "unauthorized" }
+  | { kind: "not_found" }
+  | { kind: "already_submitted" }
+  | { kind: "submitted"; attempt: PracticeAttempt };
+
+/**
+ * Grades and submits one of the caller's own in_progress attempts, all
+ * server-side and deterministically:
+ *
+ * - Ownership is verified via `getAttemptByIdForOwner`, exactly like
+ *   every other operation in this module.
+ * - The attempt must currently be `in_progress`; already-submitted maps
+ *   to `already_submitted` (mapped to HTTP 409 by the route) rather
+ *   than silently re-grading.
+ * - The worksheet is re-loaded through owner-scoped access (never
+ *   trusted just because the attempt references it), and its
+ *   `questions[].answer` - the only source of correct answers this
+ *   function ever reads - is exactly what `gradeAttempt` (Phase 10F's
+ *   pure, trim+case-insensitive grading rule) compares learner answers
+ *   against. Nothing about grading is ever accepted from a caller.
+ * - The graded result (per-question `is_correct`, `correctCount`,
+ *   `scorePercent`) is persisted by a single call to
+ *   `practiceRepository.submitAttempt`, which applies the whole
+ *   attempt-status-transition + answer-grading update atomically (see
+ *   its own documentation in repository.ts). A null result there means
+ *   a concurrent submit already won the race; this function reports
+ *   that the same way as an already-submitted attempt.
+ */
+export async function submitPracticeAttempt(
+  worksheetRepository: WorksheetRepository,
+  practiceRepository: PracticeRepository,
+  attemptId: string,
+  ownerId: string | null,
+): Promise<SubmitPracticeAttemptResult> {
+  if (!ownerId) return { kind: "unauthorized" };
+
+  const attempt = await practiceRepository.getAttemptByIdForOwner(attemptId, ownerId);
+  if (!attempt) return { kind: "not_found" };
+
+  if (attempt.status !== "in_progress") return { kind: "already_submitted" };
+
+  const worksheet = await worksheetRepository.getByIdForOwner(attempt.worksheetId, ownerId);
+  if (!worksheet) return { kind: "not_found" };
+
+  const learnerAnswers = await practiceRepository.listAnswersForAttempt(attemptId, ownerId);
+  const { grades, correctCount, scorePercent } = gradeAttempt(worksheet.questions, learnerAnswers);
+
+  const submitted = await practiceRepository.submitAttempt(
+    attemptId,
+    ownerId,
+    grades,
+    correctCount,
+    scorePercent,
+  );
+  if (!submitted) return { kind: "already_submitted" };
+
+  return { kind: "submitted", attempt: submitted };
 }

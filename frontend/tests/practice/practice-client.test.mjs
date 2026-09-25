@@ -114,6 +114,8 @@ const rawDetail = (overrides = {}) => ({
     worksheetId: WORKSHEET_ID,
     status: "in_progress",
     questionCount: 2,
+    correctCount: null,
+    scorePercent: null,
     startedAt: "2026-09-25T10:00:00.000Z",
     updatedAt: "2026-09-25T10:00:00.000Z",
     submittedAt: null,
@@ -220,7 +222,10 @@ test("get attempt: network failure maps to a safe generic error", async () => {
   assert.equal(result.status, "error");
 });
 
-test("get attempt: correctCount/scorePercent are never part of the parsed shape even if present on the wire", async () => {
+test("get attempt: correctCount/scorePercent live only on attempt.*, and are null for an in_progress attempt (Phase 10F contract)", async () => {
+  // A stray top-level correctCount/scorePercent (not nested under
+  // `attempt`) must not leak into the parsed detail object itself -
+  // only `attempt.correctCount`/`attempt.scorePercent` are meaningful.
   stubFetch(async () =>
     jsonResponse(200, {
       success: true,
@@ -231,6 +236,28 @@ test("get attempt: correctCount/scorePercent are never part of the parsed shape 
   assert.equal(result.status, "found");
   assert.equal("correctCount" in result.detail, false);
   assert.equal("scorePercent" in result.detail, false);
-  assert.equal("correctCount" in result.detail.attempt, false);
-  assert.equal("scorePercent" in result.detail.attempt, false);
+  assert.equal(result.detail.attempt.correctCount, null);
+  assert.equal(result.detail.attempt.scorePercent, null);
+});
+
+test("get attempt: a genuinely submitted attempt parses real correctCount/scorePercent from attempt.*", async () => {
+  stubFetch(async () =>
+    jsonResponse(200, {
+      success: true,
+      data: rawDetail({
+        attempt: {
+          ...rawDetail().attempt,
+          status: "submitted",
+          correctCount: 3,
+          scorePercent: 60,
+          submittedAt: "2026-09-25T10:05:00.000Z",
+        },
+      }),
+    }),
+  );
+  const result = await getPracticeAttempt(ATTEMPT_ID);
+  assert.equal(result.status, "found");
+  assert.equal(result.detail.attempt.status, "submitted");
+  assert.equal(result.detail.attempt.correctCount, 3);
+  assert.equal(result.detail.attempt.scorePercent, 60);
 });

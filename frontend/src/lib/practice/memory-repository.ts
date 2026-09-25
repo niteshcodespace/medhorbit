@@ -6,6 +6,7 @@ import type {
   PracticeAttempt,
   UpsertPracticeAnswerInput,
 } from "./types";
+import type { QuestionGrade } from "./grading";
 
 function snapshotAttempt(attempt: PracticeAttempt): PracticeAttempt {
   return {
@@ -132,15 +133,54 @@ export class InMemoryPracticeRepository implements PracticeRepository {
 
   /**
    * Test-only helper: flips an attempt to `submitted` without going
-   * through a real submission flow (Phase 10E has none yet). Not part
-   * of PracticeRepository - exists only so tests can exercise the
-   * "submitted attempts reject answer writes" rule ahead of Phase 10F
-   * actually implementing submission.
+   * through a real submission flow. Not part of PracticeRepository -
+   * exists only so tests can exercise "submitted attempts reject
+   * further writes" independently of the real submitAttempt() path.
    */
   markSubmittedForTest(attemptId: string): void {
     const index = this.attempts.findIndex((a) => a.id === attemptId);
     if (index !== -1) {
       this.attempts[index] = { ...this.attempts[index], status: "submitted" };
     }
+  }
+
+  async submitAttempt(
+    attemptId: string,
+    ownerId: string,
+    grades: readonly QuestionGrade[],
+    correctCount: number,
+    scorePercent: number,
+  ): Promise<PracticeAttempt | null> {
+    // Single-threaded JS: finding the eligible attempt and replacing it
+    // happen with no intervening await, so this is atomic in the same
+    // sense the Postgres implementation's transaction is - a second
+    // call for the same attemptId sees status !== "in_progress" and
+    // returns null, exactly like a concurrent submit losing the race.
+    const index = this.attempts.findIndex(
+      (a) => a.id === attemptId && a.ownerId === ownerId && a.status === "in_progress",
+    );
+    if (index === -1) return null;
+
+    const timestamp = this.now();
+    const updated: PracticeAttempt = {
+      ...this.attempts[index],
+      status: "submitted",
+      correctCount,
+      scorePercent,
+      updatedAt: timestamp,
+      submittedAt: timestamp,
+    };
+    this.attempts[index] = snapshotAttempt(updated);
+
+    for (const grade of grades) {
+      const answerIndex = this.answers.findIndex(
+        (a) => a.attemptId === attemptId && a.questionId === grade.questionId,
+      );
+      if (answerIndex !== -1) {
+        this.answers[answerIndex] = { ...this.answers[answerIndex], isCorrect: grade.isCorrect };
+      }
+    }
+
+    return snapshotAttempt(updated);
   }
 }

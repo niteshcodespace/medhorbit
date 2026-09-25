@@ -4,6 +4,7 @@ import type {
   PracticeAttempt,
   UpsertPracticeAnswerInput,
 } from "./types";
+import type { QuestionGrade } from "./grading";
 
 /**
  * Phase 10B persistence foundation only. No submitAttempt, scoring,
@@ -76,4 +77,30 @@ export interface PracticeRepository {
     attemptId: string,
     ownerId: string,
   ): Promise<PracticeAnswer[]>;
+
+  /**
+   * Atomically transitions one of the caller's own `in_progress`
+   * attempts to `submitted`, persisting the entire grading result in
+   * one operation: `is_correct` on each graded answer, plus
+   * `correct_count`/`score_percent`/`status`/`submitted_at`/
+   * `updated_at` on the attempt itself. `grades`/`correctCount`/
+   * `scorePercent` must already be trusted, server-computed values
+   * (see lib/practice/grading.ts) - this method does not grade
+   * anything itself, only persists a grading result that was already
+   * computed.
+   *
+   * Returns null - never partially applying any part of the write -
+   * when the attempt is unknown, not owned by `ownerId`, or not
+   * currently `in_progress` (already submitted). That last case is
+   * what makes a repeated/concurrent submit safe: the attempt-row
+   * update is itself conditioned on `status = 'in_progress'`, so only
+   * one submit can ever succeed for a given attempt.
+   */
+  submitAttempt(
+    attemptId: string,
+    ownerId: string,
+    grades: readonly QuestionGrade[],
+    correctCount: number,
+    scorePercent: number,
+  ): Promise<PracticeAttempt | null>;
 }
