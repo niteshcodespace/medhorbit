@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { COLORS, TYPOGRAPHY } from "@/constants";
 import { curriculum } from "@/lib/worksheets/mock-data";
-import { getPracticeAttempt, type PracticeAttemptDetail } from "@/lib/practice/client";
+import { getPracticeAttempt, savePracticeAnswer, type PracticeAttemptDetail } from "@/lib/practice/client";
 
 type SessionState =
   | { status: "loading" }
@@ -14,6 +14,14 @@ type SessionState =
   | { status: "not_found" }
   | { status: "error"; message: string }
   | { status: "ready"; detail: PracticeAttemptDetail };
+
+type SaveState = { status: "idle" } | { status: "saving" } | { status: "error"; message: string };
+
+const UNAUTHORIZED_SAVE_MESSAGE = "Sign in to save your answer.";
+const NOT_FOUND_SAVE_MESSAGE = "This practice attempt is no longer available.";
+const NOT_WRITABLE_SAVE_MESSAGE = "This practice attempt has already been submitted.";
+const INVALID_QUESTION_SAVE_MESSAGE = "This question could not be saved.";
+const GENERIC_SAVE_MESSAGE = "Could not save your answer. Please try again.";
 
 const helpClassName = `mt-2 ${TYPOGRAPHY.small} ${COLORS.text.secondary}`;
 
@@ -49,6 +57,7 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
   const [state, setState] = useState<SessionState>({ status: "loading" });
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +142,52 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
     setAnswers((previous) => ({ ...previous, [currentQuestion.id]: value }));
   }
 
+  /**
+   * Saves the currently displayed question's answer and reports whether
+   * it's safe to navigate. Never navigates on failure - the caller must
+   * check the return value before moving `index`, so a failed save
+   * always leaves the learner on the same question with their local
+   * text untouched.
+   */
+  async function saveCurrentAnswer(): Promise<boolean> {
+    setSaveState({ status: "saving" });
+    const result = await savePracticeAnswer(
+      attemptId,
+      currentQuestion.id,
+      answers[currentQuestion.id] ?? "",
+    );
+
+    if (result.status === "saved") {
+      setSaveState({ status: "idle" });
+      return true;
+    }
+
+    const message =
+      result.status === "unauthorized"
+        ? UNAUTHORIZED_SAVE_MESSAGE
+        : result.status === "not_found"
+          ? NOT_FOUND_SAVE_MESSAGE
+          : result.status === "not_writable"
+            ? NOT_WRITABLE_SAVE_MESSAGE
+            : result.status === "invalid_question"
+              ? INVALID_QUESTION_SAVE_MESSAGE
+              : result.message || GENERIC_SAVE_MESSAGE;
+    setSaveState({ status: "error", message });
+    return false;
+  }
+
+  async function handlePrevious() {
+    if (saveState.status === "saving") return;
+    const saved = await saveCurrentAnswer();
+    if (saved) setIndex((current) => Math.max(0, current - 1));
+  }
+
+  async function handleNext() {
+    if (saveState.status === "saving") return;
+    const saved = await saveCurrentAnswer();
+    if (saved) setIndex((current) => Math.min(total - 1, current + 1));
+  }
+
   return (
     <div className="space-y-6">
       <p className={`${TYPOGRAPHY.body} ${COLORS.text.secondary}`}>
@@ -173,6 +228,11 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
             className="mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 px-3 py-2 text-white"
             autoComplete="off"
           />
+          {saveState.status === "error" && (
+            <p role="alert" className="mt-2 text-sm text-red-300">
+              {saveState.message}
+            </p>
+          )}
         </div>
       </Card>
 
@@ -180,8 +240,8 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
         <Button
           type="button"
           variant="outline"
-          onClick={() => setIndex((current) => Math.max(0, current - 1))}
-          disabled={isFirst}
+          onClick={handlePrevious}
+          disabled={isFirst || saveState.status === "saving"}
         >
           Previous
         </Button>
@@ -191,11 +251,8 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
             This is the last question.
           </p>
         ) : (
-          <Button
-            type="button"
-            onClick={() => setIndex((current) => Math.min(total - 1, current + 1))}
-          >
-            Next
+          <Button type="button" onClick={handleNext} disabled={saveState.status === "saving"}>
+            {saveState.status === "saving" ? "Saving..." : "Next"}
           </Button>
         )}
       </div>

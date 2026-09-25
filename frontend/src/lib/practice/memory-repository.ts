@@ -129,4 +129,18 @@ export class InMemoryPracticeRepository implements PracticeRepository {
       .sort((a, b) => a.answeredAt.getTime() - b.answeredAt.getTime())
       .map(snapshotAnswer);
   }
+
+  /**
+   * Test-only helper: flips an attempt to `submitted` without going
+   * through a real submission flow (Phase 10E has none yet). Not part
+   * of PracticeRepository - exists only so tests can exercise the
+   * "submitted attempts reject answer writes" rule ahead of Phase 10F
+   * actually implementing submission.
+   */
+  markSubmittedForTest(attemptId: string): void {
+    const index = this.attempts.findIndex((a) => a.id === attemptId);
+    if (index !== -1) {
+      this.attempts[index] = { ...this.attempts[index], status: "submitted" };
+    }
+  }
 }

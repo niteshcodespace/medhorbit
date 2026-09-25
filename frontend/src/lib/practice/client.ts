@@ -220,3 +220,53 @@ export async function getPracticeAttempt(attemptId: string): Promise<GetPractice
 
   return { status: "found", detail };
 }
+
+// --- save practice answer ------------------------------------------------
+
+export type SavePracticeAnswerResult =
+  | { status: "saved" }
+  | { status: "unauthorized" }
+  | { status: "not_found" }
+  | { status: "not_writable" }
+  | { status: "invalid_question" }
+  | { status: "error"; message: string };
+
+const SAVE_ANSWER_GENERIC_ERROR = "Could not save your answer. Please try again.";
+
+/**
+ * PUT /api/practice-attempts/{attemptId}/answers/{questionId}. Sends
+ * only `{ answer }` - never ownerId/userId/isCorrect/correctAnswer/
+ * score/status, and never trims or otherwise alters the learner's text
+ * before sending it.
+ */
+export async function savePracticeAnswer(
+  attemptId: string,
+  questionId: string,
+  answer: string,
+): Promise<SavePracticeAnswerResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/practice-attempts/${encodeURIComponent(attemptId)}/answers/${encodeURIComponent(questionId)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer }),
+      },
+    );
+  } catch {
+    return { status: "error", message: SAVE_ANSWER_GENERIC_ERROR };
+  }
+
+  if (response.status === 401) return { status: "unauthorized" };
+  if (response.status === 404) return { status: "not_found" };
+  if (response.status === 409) return { status: "not_writable" };
+  // This client always sends a well-formed { answer: string } body, so
+  // in practice a 400 here only ever means "question_not_found" from
+  // the server's validation - there is no genuinely malformed-request
+  // case this client itself can trigger.
+  if (response.status === 400) return { status: "invalid_question" };
+  if (!response.ok) return { status: "error", message: SAVE_ANSWER_GENERIC_ERROR };
+
+  return { status: "saved" };
+}

@@ -88,13 +88,17 @@ test("13/14. Next moves the index forward and Previous moves it backward", () =>
 
 test("15. Previous is disabled on the first question", () => {
   assert.match(practiceSessionSource, /const isFirst = index === 0;/);
-  assert.match(practiceSessionSource, /disabled=\{isFirst\}/);
+  assert.match(practiceSessionSource, /disabled=\{isFirst \|\| saveState\.status === "saving"\}/);
 });
 
 test("17. the final question shows a clear indicator instead of a Submit/scoring control", () => {
   assert.match(practiceSessionSource, /const isLast = index === total - 1;/);
   assert.match(practiceSessionSource, /This is the last question\./);
-  assert.doesNotMatch(practiceSessionSource, /Submit/i);
+  // Case-sensitive and word-bounded: a UI control would read "Submit" (a
+  // capitalized button label), which must not exist. This intentionally
+  // does not flag prose like "...already been submitted." (Phase 10E's
+  // lowercase, past-tense description of a future immutability state).
+  assert.doesNotMatch(practiceSessionSource, /\bSubmit\b/);
 });
 
 // --- local answer state ---
@@ -149,4 +153,52 @@ test("24. the answer input has an explicit label association", () => {
 test("24b. the page provides a heading and skip link, consistent with other pages", () => {
   assert.match(practicePageSource, /Skip to main content/);
   assert.match(practicePageSource, /<h1 id="practice-title"/);
+});
+
+// --- Phase 10E: answer persistence / navigation-save behavior ---
+
+test("23. Next navigation saves the current answer before moving forward", () => {
+  assert.match(practiceSessionSource, /async function handleNext\(\)/);
+  assert.match(practiceSessionSource, /const saved = await saveCurrentAnswer\(\);\s*\n\s*if \(saved\) setIndex\(\(current\) => Math\.min/);
+  assert.match(practiceSessionSource, /onClick=\{handleNext\}/);
+});
+
+test("24. Previous navigation saves the current answer before moving backward", () => {
+  assert.match(practiceSessionSource, /async function handlePrevious\(\)/);
+  assert.match(practiceSessionSource, /const saved = await saveCurrentAnswer\(\);\s*\n\s*if \(saved\) setIndex\(\(current\) => Math\.max/);
+  assert.match(practiceSessionSource, /onClick=\{handlePrevious\}/);
+});
+
+test("25. both navigation buttons are disabled while a save is pending", () => {
+  assert.match(practiceSessionSource, /disabled=\{isFirst \|\| saveState\.status === "saving"\}/);
+  assert.match(practiceSessionSource, /disabled=\{saveState\.status === "saving"\}/);
+});
+
+test("26/27. a failed save reports an error and does not clear the local answer or the failed request re-throwing", () => {
+  // saveCurrentAnswer returns false on failure and the navigation
+  // handlers only advance `index` when it returns true - so a failed
+  // save structurally cannot move the learner off the current question.
+  assert.match(practiceSessionSource, /return false;/);
+  assert.match(practiceSessionSource, /setSaveState\(\{ status: "error", message \}\)/);
+  // Local answer state (`answers`) is never cleared or reset on a save
+  // failure - only `saveState` changes.
+  assert.doesNotMatch(practiceSessionSource, /setAnswers\(\{\}\)/);
+});
+
+test("saved answer uses the client's savePracticeAnswer helper, sending the exact locally-entered text", () => {
+  assert.match(
+    practiceSessionSource,
+    /savePracticeAnswer\(\s*\n?\s*attemptId,\s*\n?\s*currentQuestion\.id,\s*\n?\s*answers\[currentQuestion\.id\] \?\? "",\s*\n?\s*\)/,
+  );
+});
+
+test("30. the practice session component still never imports the normal worksheet-detail fetch helper", () => {
+  assert.doesNotMatch(practiceSessionSource, /getSavedWorksheet/);
+  assert.doesNotMatch(practiceSessionSource, /lib\/worksheets\/saved-client/);
+});
+
+test("29. no grading/scoring/submission vocabulary was introduced in the practice session UI", () => {
+  for (const forbidden of [/\bsubmitAttempt\b/i, /\bgradeAnswer\b/i, /\bnormalize\b/i]) {
+    assert.doesNotMatch(practiceSessionSource, forbidden);
+  }
 });
