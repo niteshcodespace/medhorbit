@@ -67,6 +67,96 @@ export async function startPracticeAttempt(
   return { status: "created", attemptId: id };
 }
 
+// --- practice attempt history (Phase 10H) --------------------------------
+
+export type GetPracticeAttemptsResult =
+  | { status: "found"; attempts: PracticeAttemptSummary[] }
+  | { status: "unauthorized" }
+  | { status: "not_found" }
+  | { status: "error"; message: string };
+
+const HISTORY_GENERIC_ERROR = "Practice history couldn't be loaded. Try again.";
+
+function toAttemptSummaryHistoryItem(value: unknown): PracticeAttemptSummary | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { id, worksheetId, status, questionCount, correctCount, scorePercent, startedAt, updatedAt, submittedAt } =
+    value as Record<string, unknown>;
+  if (
+    !isNonEmptyString(id) ||
+    !isNonEmptyString(worksheetId) ||
+    !isNonEmptyString(status) ||
+    typeof questionCount !== "number" ||
+    !(correctCount === null || typeof correctCount === "number") ||
+    !(scorePercent === null || typeof scorePercent === "number") ||
+    !isNonEmptyString(startedAt) ||
+    !isNonEmptyString(updatedAt) ||
+    !(submittedAt === null || isNonEmptyString(submittedAt))
+  ) {
+    return null;
+  }
+  // Explicit allow-list, same shape as toAttemptSummary below - never
+  // spreads the raw response object, so a stray/forged field (e.g. an
+  // ownerId or an answer) could never ride along into UI state.
+  return {
+    id,
+    worksheetId,
+    status,
+    questionCount,
+    correctCount: correctCount as number | null,
+    scorePercent: scorePercent as number | null,
+    startedAt,
+    updatedAt,
+    submittedAt: submittedAt as string | null,
+  };
+}
+
+/**
+ * GET /api/worksheets/{worksheetId}/practice-attempts - lists the
+ * caller's own practice attempts on one worksheet, newest first, for the
+ * "Practice History" section of the saved worksheet page. Never returns
+ * worksheet correct answers, learner answers, or per-question
+ * correctness - those never appear on this endpoint's response at all.
+ */
+export async function getPracticeAttemptsForWorksheet(
+  worksheetId: string,
+): Promise<GetPracticeAttemptsResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/worksheets/${encodeURIComponent(worksheetId)}/practice-attempts`,
+      { method: "GET" },
+    );
+  } catch {
+    return { status: "error", message: HISTORY_GENERIC_ERROR };
+  }
+
+  if (response.status === 401) return { status: "unauthorized" };
+  if (response.status === 404) return { status: "not_found" };
+  if (!response.ok) return { status: "error", message: HISTORY_GENERIC_ERROR };
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { status: "error", message: HISTORY_GENERIC_ERROR };
+  }
+
+  if (typeof body !== "object" || body === null) {
+    return { status: "error", message: HISTORY_GENERIC_ERROR };
+  }
+  const { data } = body as Record<string, unknown>;
+  if (!Array.isArray(data)) return { status: "error", message: HISTORY_GENERIC_ERROR };
+
+  const attempts: PracticeAttemptSummary[] = [];
+  for (const item of data) {
+    const attempt = toAttemptSummaryHistoryItem(item);
+    if (!attempt) return { status: "error", message: HISTORY_GENERIC_ERROR };
+    attempts.push(attempt);
+  }
+
+  return { status: "found", attempts };
+}
+
 // --- retrieve practice attempt ------------------------------------------
 
 export type PracticeQuestion = { id: string; prompt: string; type: string };

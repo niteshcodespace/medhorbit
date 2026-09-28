@@ -214,6 +214,53 @@ export async function getPracticeAttemptReview(
   return { kind: "found", detail: { attempt, worksheet, answers } };
 }
 
+export type ListPracticeAttemptsResult =
+  | { kind: "unauthorized" }
+  | { kind: "not_found" }
+  | { kind: "found"; attempts: PracticeAttempt[] };
+
+/**
+ * Phase 10H: lists all of the caller's own practice attempts for one
+ * worksheet - the read-model behind "Practice History" on the saved
+ * worksheet page. Deliberately separate from `getPracticeAttemptDetail`/
+ * `getPracticeAttemptReview` (which load a single attempt by attempt id):
+ * this loads by worksheet id, for every attempt the owner has ever
+ * started on it, regardless of status.
+ *
+ * Ownership is enforced exactly like `startPracticeAttempt`: the
+ * worksheet is loaded through `getByIdForOwner(worksheetId, ownerId)`
+ * BEFORE listing attempts. An unknown worksheet id and one owned by
+ * someone else both produce `{ kind: "not_found" }` - the route maps
+ * both to the same generic 404, so a wrong owner cannot learn whether a
+ * worksheet id exists at all.
+ *
+ * This function does not grade, rank, or otherwise interpret the
+ * attempts - it only returns them, newest-first, exactly as
+ * `listAttemptsByWorksheetForOwner` provides them (see
+ * PracticeRepository's own ordering contract). The route/DTO layer
+ * (`toPracticeAttemptDTO`) is what strips this down to an answer-safe
+ * shape; this function still returns full domain `PracticeAttempt`
+ * objects (including `ownerId`) as an internal detail, matching every
+ * other `*Result` shape in this module.
+ */
+export async function listPracticeAttemptsForWorksheet(
+  worksheetRepository: WorksheetRepository,
+  practiceRepository: PracticeRepository,
+  worksheetId: string,
+  ownerId: string | null,
+): Promise<ListPracticeAttemptsResult> {
+  if (!ownerId) return { kind: "unauthorized" };
+
+  const worksheet = await worksheetRepository.getByIdForOwner(worksheetId, ownerId);
+  if (!worksheet) return { kind: "not_found" };
+
+  const attempts = await practiceRepository.listAttemptsByWorksheetForOwner(
+    worksheet.id,
+    ownerId,
+  );
+  return { kind: "found", attempts };
+}
+
 export type SubmitPracticeAttemptResult =
   | { kind: "unauthorized" }
   | { kind: "not_found" }

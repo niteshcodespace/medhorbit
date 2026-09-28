@@ -111,7 +111,7 @@ export class PostgresPracticeRepository implements PracticeRepository {
     const { rows } = await this.pool.query<AttemptRow>(
       `SELECT ${ATTEMPT_COLUMNS} FROM practice_attempts
        WHERE worksheet_id = $1 AND owner_id = $2
-       ORDER BY started_at DESC`,
+       ORDER BY started_at DESC, id DESC`,
       [worksheetId, ownerId],
     );
     return rows.map(toPracticeAttempt);
