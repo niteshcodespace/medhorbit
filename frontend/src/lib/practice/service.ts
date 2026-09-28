@@ -164,6 +164,56 @@ export async function savePracticeAnswer(
   return { kind: "saved", answer: saved };
 }
 
+export type GetPracticeAttemptReviewResult =
+  | { kind: "unauthorized" }
+  | { kind: "not_found" }
+  | { kind: "not_submitted" }
+  | { kind: "found"; detail: PracticeAttemptDetail };
+
+/**
+ * Loads the answer-review data for one of the caller's own SUBMITTED
+ * practice attempts - the Phase 10G counterpart to
+ * `getPracticeAttemptDetail`, but gated on `status === "submitted"` and
+ * intended only for the dedicated `/review` route, never the normal
+ * attempt-detail route.
+ *
+ * Ownership is enforced exactly like every other operation in this
+ * module (via `getAttemptByIdForOwner`, re-verifying the worksheet
+ * through owner-scoped access): an unknown attempt id and one owned by
+ * someone else both produce `{ kind: "not_found" }`, so a wrong owner
+ * cannot learn whether the attempt exists.
+ *
+ * An `in_progress` attempt - even one the caller genuinely owns -
+ * produces `{ kind: "not_submitted" }` rather than any detail. This is
+ * the hard security boundary for this phase: expected answers and
+ * per-question correctness must never be reachable before submission.
+ *
+ * This function does NOT grade or re-grade anything. `answers` here are
+ * exactly what Phase 10F's `submitAttempt` already persisted (each
+ * carrying its own `isCorrect`) - the caller (the /review route, via
+ * `toPracticeReviewQuestionDTO`) combines them with the trusted
+ * worksheet's questions to build the review response.
+ */
+export async function getPracticeAttemptReview(
+  worksheetRepository: WorksheetRepository,
+  practiceRepository: PracticeRepository,
+  attemptId: string,
+  ownerId: string | null,
+): Promise<GetPracticeAttemptReviewResult> {
+  if (!ownerId) return { kind: "unauthorized" };
+
+  const attempt = await practiceRepository.getAttemptByIdForOwner(attemptId, ownerId);
+  if (!attempt) return { kind: "not_found" };
+
+  if (attempt.status !== "submitted") return { kind: "not_submitted" };
+
+  const worksheet = await worksheetRepository.getByIdForOwner(attempt.worksheetId, ownerId);
+  if (!worksheet) return { kind: "not_found" };
+
+  const answers = await practiceRepository.listAnswersForAttempt(attemptId, ownerId);
+  return { kind: "found", detail: { attempt, worksheet, answers } };
+}
+
 export type SubmitPracticeAttemptResult =
   | { kind: "unauthorized" }
   | { kind: "not_found" }

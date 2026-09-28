@@ -108,3 +108,56 @@ export function toPracticeAnswerDTO(answer: PracticeAnswer): PracticeAnswerDTO {
     answeredAt: answer.answeredAt.toISOString(),
   };
 }
+
+/**
+ * Phase 10G submitted-review DTO. Deliberately a SEPARATE type/mapper
+ * from PracticeQuestionDTO/PracticeAnswerDTO above rather than a
+ * weakened/extended version of either - those two mappers are what keep
+ * the pre-submission (`GET /api/practice-attempts/[id]`) response
+ * answer-safe, and must stay that way forever regardless of what this
+ * phase adds. Only the dedicated review endpoint
+ * (`GET /api/practice-attempts/[id]/review`) may ever construct this
+ * DTO, and only for an attempt already confirmed `submitted` by
+ * lib/practice/service.ts (getPracticeAttemptReview).
+ *
+ * `expectedAnswer` comes from the trusted, server-side worksheet
+ * question (`question.answer`) - never from anything client-supplied.
+ * `isCorrect` comes from the PERSISTED `practice_answers.is_correct`
+ * value written during Phase 10F submission - this mapper does not
+ * grade or re-grade anything itself.
+ *
+ * Unanswered vs. answered-with-empty-string is preserved exactly:
+ * `learnerAnswer` is `null` only when no PracticeAnswer row was passed
+ * in (the question was never answered) - a row that exists with
+ * `answer: ""` still produces `learnerAnswer: ""`, never `null`.
+ */
+export type PracticeReviewQuestionDTO = {
+  questionId: string;
+  prompt: string;
+  type: string;
+  learnerAnswer: string | null;
+  expectedAnswer: string;
+  isCorrect: boolean;
+};
+
+/**
+ * Combines one trusted worksheet question with the learner's persisted
+ * answer for that question (or `undefined` when the question was never
+ * answered). `isCorrect` is read directly from `learnerAnswer.isCorrect`
+ * - the value Phase 10F's `submitAttempt` already persisted - and is
+ * `false` for an unanswered question (there is no row, so nothing was
+ * ever graded correct).
+ */
+export function toPracticeReviewQuestionDTO(
+  question: Question,
+  learnerAnswer: PracticeAnswer | undefined,
+): PracticeReviewQuestionDTO {
+  return {
+    questionId: question.id,
+    prompt: question.prompt,
+    type: question.type,
+    learnerAnswer: learnerAnswer ? learnerAnswer.answer : null,
+    expectedAnswer: question.answer ?? "",
+    isCorrect: learnerAnswer ? learnerAnswer.isCorrect === true : false,
+  };
+}

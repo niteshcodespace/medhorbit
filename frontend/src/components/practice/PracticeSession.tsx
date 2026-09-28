@@ -8,9 +8,11 @@ import { COLORS, TYPOGRAPHY } from "@/constants";
 import { curriculum } from "@/lib/worksheets/mock-data";
 import {
   getPracticeAttempt,
+  getPracticeReview,
   savePracticeAnswer,
   submitPracticeAttempt,
   type PracticeAttemptDetail,
+  type PracticeReviewDetail,
 } from "@/lib/practice/client";
 
 type SessionState =
@@ -23,6 +25,18 @@ type SessionState =
 type SaveState = { status: "idle" } | { status: "saving" } | { status: "error"; message: string };
 
 type SubmitState = { status: "idle" } | { status: "submitting" } | { status: "error"; message: string };
+
+/** Answer review (Phase 10G) is fetched only once an attempt is known to
+ * be submitted, via the dedicated /review endpoint - see the effect
+ * below. A failed review fetch never hides the already-loaded Practice
+ * Complete summary; only this state, not `state`, reflects it. */
+type ReviewState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "loaded"; review: PracticeReviewDetail }
+  | { status: "error"; message: string };
+
+const REVIEW_ERROR_MESSAGE = "Answer review couldn't be loaded. Try again.";
 
 const UNAUTHORIZED_SAVE_MESSAGE = "Sign in to save your answer.";
 const NOT_FOUND_SAVE_MESSAGE = "This practice attempt is no longer available.";
@@ -71,6 +85,8 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [submitState, setSubmitState] = useState<SubmitState>({ status: "idle" });
+  const [review, setReview] = useState<PracticeReviewDetail | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +109,53 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
       cancelled = true;
     };
   }, [attemptId]);
+
+  // Phase 10G: once the attempt is known to be submitted (whether from a
+  // fresh submit or a direct/refreshed load), fetch the answer review
+  // from the dedicated /review endpoint. Never fetched for an
+  // in_progress attempt - the effect's own guard below is not the
+  // security boundary (the server enforces that with a 409), but there
+  // is simply nothing to review before submission.
+  //
+  // `review`/`reviewError` are the only state this effect ever sets, and
+  // only from inside the async `.then` callback - never synchronously in
+  // the effect body itself (React's rules-of-hooks lint flags that
+  // pattern). `reviewState` below is a plain derived value, not its own
+  // piece of state: while submitted and neither `review` nor
+  // `reviewError` is set yet, it reads as "loading" - no separate
+  // "start loading" setState call is needed to produce that.
+  const isSubmitted = state.status === "ready" && state.detail.attempt.status === "submitted";
+  useEffect(() => {
+    if (!isSubmitted) return;
+    if (review !== null || reviewError !== null) return;
+
+    let cancelled = false;
+    getPracticeReview(attemptId).then((result) => {
+      if (cancelled) return;
+      if (result.status === "found") {
+        setReview(result.detail);
+      } else {
+        setReviewError(REVIEW_ERROR_MESSAGE);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSubmitted, attemptId, review, reviewError]);
+
+  const reviewState: ReviewState = !isSubmitted
+    ? { status: "idle" }
+    : review
+      ? { status: "loaded", review }
+      : reviewError
+        ? { status: "error", message: reviewError }
+        : { status: "loading" };
+
+  function retryReview() {
+    setReview(null);
+    setReviewError(null);
+  }
 
   if (state.status === "loading") {
     return (
@@ -259,6 +322,53 @@ export default function PracticeSession({ attemptId }: { attemptId: string }) {
             {detail.attempt.scorePercent ?? 0}%
           </p>
         </Card>
+
+        <Card>
+          <h3 className={TYPOGRAPHY.sectionTitle}>Review Answers</h3>
+
+          {reviewState.status === "loading" && (
+            <p role="status" className={helpClassName}>
+              Loading review...
+            </p>
+          )}
+
+          {reviewState.status === "error" && (
+            <div className="mt-4">
+              <p role="alert" className="text-red-300">
+                {reviewState.message}
+              </p>
+              <Button type="button" variant="outline" onClick={retryReview} className="mt-3">
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {reviewState.status === "loaded" && (
+            <ol className="mt-4 space-y-6">
+              {reviewState.review.questions.map((question, questionIndex) => (
+                <li key={question.questionId} className="border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
+                  <p className={`${TYPOGRAPHY.small} ${COLORS.text.secondary}`}>
+                    Question {questionIndex + 1}
+                  </p>
+                  <p className={`mt-1 ${TYPOGRAPHY.body}`}>{question.prompt}</p>
+
+                  <p className={`mt-3 ${TYPOGRAPHY.small} ${COLORS.text.secondary}`}>Your answer:</p>
+                  <p className={TYPOGRAPHY.body}>
+                    {question.learnerAnswer === null ? "Not answered" : question.learnerAnswer}
+                  </p>
+
+                  <p className={`mt-3 ${TYPOGRAPHY.small} ${COLORS.text.secondary}`}>Correct answer:</p>
+                  <p className={TYPOGRAPHY.body}>{question.expectedAnswer}</p>
+
+                  <p className="mt-3 font-semibold">
+                    {question.isCorrect ? "Correct" : "Incorrect"}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
+
         <Link href="/worksheets/saved" className="inline-block">
           <Button type="button">Back to My Worksheets</Button>
         </Link>

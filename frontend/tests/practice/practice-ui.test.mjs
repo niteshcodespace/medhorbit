@@ -114,14 +114,17 @@ test("21. local answer state can be seeded from existing server-known answers", 
   assert.match(practiceSessionSource, /setAnswers\(initialAnswers\(result\.detail\)\)/);
 });
 
-// --- 18/19. no per-question answer key / correctness anywhere in the rendering component ---
+// --- 18/19. no client-side grading vocabulary in the rendering component ---
 // (Phase 10F legitimately introduces correctCount/scorePercent in the
-// post-submission summary - see tests 45/46/47 below - so those two are
-// no longer forbidden. What must still never appear is the worksheet's
-// own correct-answer text/key or any per-question correctness signal.)
+// post-submission summary - see tests 45/46/47 below - and Phase 10G
+// legitimately introduces `question.isCorrect` in the submitted-only
+// review list below (it is the server-provided, already-graded value
+// from the review DTO - the component never computes it). What must
+// still never appear is the worksheet's own raw answer-key vocabulary
+// or any client-side comparison against it.)
 
-test("18/19. the practice session component never references the worksheet answer key or per-question correctness", () => {
-  for (const forbidden of [/\bcorrectAnswer\b/i, /\bisCorrect\b/i, /[Aa]nswer\s*[Kk]ey/]) {
+test("18/19. the practice session component never references the worksheet's raw answer key or performs client-side grading", () => {
+  for (const forbidden of [/\bcorrectAnswer\b/i, /[Aa]nswer\s*[Kk]ey/, /\bgradeAttempt\b/, /\bnormalizePracticeAnswer\b/]) {
     assert.doesNotMatch(practiceSessionSource, forbidden);
   }
 });
@@ -254,7 +257,102 @@ test("48/49. a submitted attempt (fresh submit or a resumed/refreshed GET) rende
   );
 });
 
-test("50. no detailed per-question answer-review UI exists yet (no per-question correctness list)", () => {
-  assert.doesNotMatch(practiceSessionSource, /isCorrect/);
-  assert.doesNotMatch(practiceSessionSource, /Review/i);
+test("50 (superseded by Phase 10G tests below): a detailed per-question answer-review UI now exists for submitted attempts", () => {
+  assert.match(practiceSessionSource, /Review Answers/);
+  assert.match(practiceSessionSource, /question\.isCorrect/);
+});
+
+// --- Phase 10G: results / answer review UI ---
+
+test("33. submitted summary still visible alongside review", () => {
+  assert.match(practiceSessionSource, /Practice Complete/);
+  assert.match(practiceSessionSource, /Score: \{detail\.attempt\.correctCount/);
+});
+
+test("26/27. client fetch is via getPracticeReview from the practice client module, never the worksheet-detail helper", () => {
+  assert.match(practiceSessionSource, /getPracticeReview\(attemptId\)/);
+  assert.match(practiceSessionSource, /from "@\/lib\/practice\/client"/);
+  assert.doesNotMatch(practiceSessionSource, /getSavedWorksheet/);
+});
+
+test("34. review displays question prompt", () => {
+  assert.match(practiceSessionSource, /\{question\.prompt\}/);
+});
+
+test("35. review displays learner answer", () => {
+  assert.match(practiceSessionSource, /question\.learnerAnswer/);
+});
+
+test("36. review displays expected answer", () => {
+  assert.match(practiceSessionSource, /question\.expectedAnswer/);
+});
+
+test("37/38. review displays the words Correct and Incorrect, not color/icon alone", () => {
+  assert.match(practiceSessionSource, /\{question\.isCorrect \? "Correct" : "Incorrect"\}/);
+});
+
+test("39. unanswered displays 'Not answered'", () => {
+  assert.match(practiceSessionSource, /question\.learnerAnswer === null \? "Not answered" : question\.learnerAnswer/);
+});
+
+test("40. accessible correctness text exists as plain text content, not only a visual marker", () => {
+  assert.doesNotMatch(practiceSessionSource, /[✓✗]/); // no check/x glyphs used as the sole signal
+  assert.match(practiceSessionSource, /"Correct" : "Incorrect"/);
+});
+
+// Use the unique `if (detail.attempt.status === "submitted")` guard (not
+// the earlier `isSubmitted` assignment, which contains the same
+// substring) as the start marker for slicing out the submitted-state
+// return block.
+const SUBMITTED_GUARD = 'if (detail.attempt.status === "submitted")';
+
+test("41. no editable input exists anywhere in the submitted-state return block", () => {
+  const submittedBranchStart = practiceSessionSource.indexOf(SUBMITTED_GUARD);
+  assert.ok(submittedBranchStart !== -1);
+  const nextSectionIndex = practiceSessionSource.indexOf("Question {index + 1} of {total}");
+  const submittedBlock = practiceSessionSource.slice(submittedBranchStart, nextSectionIndex);
+  assert.doesNotMatch(submittedBlock, /<input/);
+});
+
+test("42. no Previous/Next controls in the submitted-state block", () => {
+  const submittedBranchStart = practiceSessionSource.indexOf(SUBMITTED_GUARD);
+  const nextSectionIndex = practiceSessionSource.indexOf("Question {index + 1} of {total}");
+  const submittedBlock = practiceSessionSource.slice(submittedBranchStart, nextSectionIndex);
+  assert.doesNotMatch(submittedBlock, />Previous</);
+  assert.doesNotMatch(submittedBlock, />Next</);
+});
+
+test("43. refresh/direct submitted state supports review: the review effect is gated on submitted status derived from the loaded attempt, not local navigation state", () => {
+  assert.match(
+    practiceSessionSource,
+    /const isSubmitted = state\.status === "ready" && state\.detail\.attempt\.status === "submitted";/,
+  );
+  assert.match(practiceSessionSource, /if \(!isSubmitted\) return;/);
+});
+
+test("44. review loading state is handled distinctly from the attempt-loading state", () => {
+  assert.match(practiceSessionSource, /reviewState\.status === "loading"/);
+  assert.match(practiceSessionSource, /Loading review\.\.\./);
+});
+
+test("45. review failure does not hide the score summary: the error branch is a sibling of the score Card, not a replacement for the whole return", () => {
+  assert.match(practiceSessionSource, /reviewState\.status === "error"/);
+  assert.match(practiceSessionSource, /Score: \{detail\.attempt\.correctCount/);
+  // Both blocks exist inside the same submitted-state return, so a
+  // review error can never suppress the already-rendered score Card.
+  const submittedBranchStart = practiceSessionSource.indexOf(SUBMITTED_GUARD);
+  const errorIndex = practiceSessionSource.indexOf('reviewState.status === "error"');
+  const scoreIndex = practiceSessionSource.indexOf("Score: {detail.attempt.correctCount");
+  assert.ok(submittedBranchStart < scoreIndex);
+  assert.ok(scoreIndex < errorIndex);
+});
+
+test("review has a retry affordance on failure", () => {
+  assert.match(practiceSessionSource, /function retryReview\(\)/);
+  assert.match(practiceSessionSource, /onClick=\{retryReview\}/);
+});
+
+test("no client-side answer comparison in the review render: only the server-provided question.isCorrect is consumed", () => {
+  assert.doesNotMatch(practiceSessionSource, /answersMatch/);
+  assert.doesNotMatch(practiceSessionSource, /question\.learnerAnswer === question\.expectedAnswer/);
 });

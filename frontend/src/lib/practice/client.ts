@@ -227,6 +227,148 @@ export async function getPracticeAttempt(attemptId: string): Promise<GetPractice
   return { status: "found", detail };
 }
 
+// --- submitted answer review (Phase 10G) ----------------------------------
+
+export type PracticeReviewQuestion = {
+  questionId: string;
+  prompt: string;
+  type: string;
+  learnerAnswer: string | null;
+  expectedAnswer: string;
+  isCorrect: boolean;
+};
+
+export type PracticeReviewDetail = {
+  attempt: PracticeAttemptSummary;
+  worksheet: PracticeWorksheetMetadata;
+  questions: PracticeReviewQuestion[];
+};
+
+export type GetPracticeReviewResult =
+  | { status: "found"; detail: PracticeReviewDetail }
+  | { status: "unauthorized" }
+  | { status: "not_found" }
+  | { status: "not_submitted" }
+  | { status: "error"; message: string };
+
+const REVIEW_GENERIC_ERROR = "Answer review couldn't be loaded. Try again.";
+
+function toReviewQuestion(value: unknown): PracticeReviewQuestion | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { questionId, prompt, type, learnerAnswer, expectedAnswer, isCorrect } =
+    value as Record<string, unknown>;
+  if (
+    !isNonEmptyString(questionId) ||
+    !isNonEmptyString(prompt) ||
+    !isNonEmptyString(type) ||
+    !(learnerAnswer === null || typeof learnerAnswer === "string") ||
+    typeof expectedAnswer !== "string" ||
+    typeof isCorrect !== "boolean"
+  ) {
+    return null;
+  }
+  // Explicit allow-list: only these six fields ever cross into the
+  // returned object, regardless of what else the response might contain
+  // (e.g. it must never carry ownerId/userId/internal db ids along).
+  return { questionId, prompt, type, learnerAnswer, expectedAnswer, isCorrect };
+}
+
+function toReviewDetail(value: unknown): PracticeReviewDetail | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { attempt, worksheet, questions } = value as Record<string, unknown>;
+
+  if (typeof attempt !== "object" || attempt === null) return null;
+  const { id, worksheetId, status, questionCount, correctCount, scorePercent, startedAt, updatedAt, submittedAt } =
+    attempt as Record<string, unknown>;
+  if (
+    !isNonEmptyString(id) ||
+    !isNonEmptyString(worksheetId) ||
+    !isNonEmptyString(status) ||
+    typeof questionCount !== "number" ||
+    !(correctCount === null || typeof correctCount === "number") ||
+    !(scorePercent === null || typeof scorePercent === "number") ||
+    !isNonEmptyString(startedAt) ||
+    !isNonEmptyString(updatedAt) ||
+    !(submittedAt === null || isNonEmptyString(submittedAt))
+  ) {
+    return null;
+  }
+
+  if (typeof worksheet !== "object" || worksheet === null) return null;
+  const { classId, subjectId, topicId, difficulty } = worksheet as Record<string, unknown>;
+  if (
+    !isNonEmptyString(classId) ||
+    !isNonEmptyString(subjectId) ||
+    !isNonEmptyString(topicId) ||
+    !isNonEmptyString(difficulty)
+  ) {
+    return null;
+  }
+
+  if (!Array.isArray(questions)) return null;
+  const mappedQuestions: PracticeReviewQuestion[] = [];
+  for (const item of questions) {
+    const question = toReviewQuestion(item);
+    if (!question) return null;
+    mappedQuestions.push(question);
+  }
+
+  return {
+    attempt: {
+      id,
+      worksheetId,
+      status,
+      questionCount,
+      correctCount: correctCount as number | null,
+      scorePercent: scorePercent as number | null,
+      startedAt,
+      updatedAt,
+      submittedAt: submittedAt as string | null,
+    },
+    worksheet: { classId, subjectId, topicId, difficulty },
+    questions: mappedQuestions,
+  };
+}
+
+/**
+ * GET /api/practice-attempts/{attemptId}/review - the ONLY endpoint this
+ * client calls for review data. Never calls the normal worksheet-detail
+ * endpoint, never re-derives `isCorrect` itself: the browser consumes
+ * exactly the server-provided value from each parsed question, with no
+ * client-side answer comparison of any kind.
+ */
+export async function getPracticeReview(attemptId: string): Promise<GetPracticeReviewResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/practice-attempts/${encodeURIComponent(attemptId)}/review`, {
+      method: "GET",
+    });
+  } catch {
+    return { status: "error", message: REVIEW_GENERIC_ERROR };
+  }
+
+  if (response.status === 401) return { status: "unauthorized" };
+  if (response.status === 404) return { status: "not_found" };
+  if (response.status === 409) return { status: "not_submitted" };
+  if (!response.ok) return { status: "error", message: REVIEW_GENERIC_ERROR };
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { status: "error", message: REVIEW_GENERIC_ERROR };
+  }
+
+  if (typeof body !== "object" || body === null) {
+    return { status: "error", message: REVIEW_GENERIC_ERROR };
+  }
+  const { data } = body as Record<string, unknown>;
+  const detail = toReviewDetail(data);
+  if (!detail) return { status: "error", message: REVIEW_GENERIC_ERROR };
+
+  return { status: "found", detail };
+}
+
 // --- save practice answer ------------------------------------------------
 
 export type SavePracticeAnswerResult =

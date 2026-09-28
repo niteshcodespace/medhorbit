@@ -67,6 +67,8 @@ try {
         "tests/practice/practice-grading.test.mjs",
         "tests/practice/practice-submit.test.mjs",
         "tests/practice/practice-submit-client.test.mjs",
+        "tests/practice/practice-review.test.mjs",
+        "tests/practice/practice-review-client.test.mjs",
       ],
       { stdio: "inherit", env: { ...process.env, WORKSHEET_TEST_BUILD_DIR: outDir, ANTHROPIC_API_KEY: "" } },
     );
